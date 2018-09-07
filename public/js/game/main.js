@@ -1,8 +1,8 @@
 const THIS_PLAYER_CONNECTED = 1
-const callsPerSecond = 60
+const callRate = 20
 
 //UI
-const CANVAS_DIMENSIONS = {width: 1000,height: 600}
+const CANVAS_DIMENSIONS = {width: 1600,height: 800}
 const PLAYER_DIAMETER_STANDARD = 40
 const PLAYER_DIAMETER_MEDIUM = 30
 const PLAYER_DIAMETER_SMALL = 20
@@ -31,12 +31,24 @@ var PRISON_GREY;
 var red_flag_img;
 var green_flag_img;
 
-var socket = io();
 
+//game
+var socket = io();
 var flags = [];
 var players = {};
+var this_player_name = "Anon"
 
-var CONNECTED = false
+var CONNECTED_TO_ROOM = false
+var GAME_IN_PROGRESS = false
+var update_clock;
+
+//ui elements 
+var start_button;
+var name_input;
+
+var create_room_button;
+
+var event_table;
 
 function preload()
 {
@@ -56,187 +68,282 @@ function setup()
     PLAYER_GREEN = color(80, 186, 104)//green
     PRISON_GREY = color(50,90)
 
+    
+
+    //#region DRAW INTRO
+    var menuItemWidth = 300
+    var menuItemHeight = 50
+    name_input = createInput('ENTER NAME')
+    name_input.style('height',menuItemHeight+'px')
+    name_input.style('width',menuItemWidth+'px')
+    name_input.style('font-size',menuItemHeight*3/5+'px')
+    name_input.style('text-align','center')
+    name_input.elt.onfocus = function(){
+        name_input.elt.value = ""
+    }
+
+    name_input.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2-menuItemHeight);
+
+    start_button = createButton('START')
+    start_button.style('font-size',menuItemHeight*2/5+'px')    
+    start_button.style('height',menuItemHeight+'px')
+    start_button.style('width',menuItemWidth+'px')
+    start_button.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2);
+    start_button.mousePressed(StartGame);
+    //#endregion
+
+
+    //#region DRAW MENU
+    create_room_button = createButton('CREATE ROOM')
+    create_room_button.style('font-size',menuItemHeight*2/5+'px')    
+    create_room_button.style('height',menuItemHeight+'px')
+    create_room_button.style('width',menuItemWidth+'px')
+    create_room_button.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2);
+    create_room_button.mousePressed(CreateRoom);
+    //#endregion
+
+    //#region DRAW GAME
     createCanvas(CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height)
 
-    setInterval(Update,1000/callsPerSecond)
+    event_table = createElement('tbody')
+    event_table.style('width','200px')
+    event_table.style('height',CANVAS_DIMENSIONS.height+'px')
+    event_table.style('background-color','grey')
+    event_table.position(CANVAS_DIMENSIONS.width,0)
+    //#endregion
+    
+    Scene('INTRO')
+
+    AddToChat("CONNECTED")
 }
+
+function AddToChat(content)
+{
+    var td = createElement('td')
+    td.parent(event_table)
+    td.html(content)
+    td.style('color','white')
+    td.style('font-size','20px')
+    td.style('font-family','Calibri')
+    td.style('padding-left','10px')
+    td.style('padding-top','8px')
+}
+
+function Scene(name)
+{
+    switch(name)
+    {
+        case 'INTRO':
+        name_input.show()
+        start_button.show()
+        create_room_button.hide()
+        break;
+
+        case 'MENU':
+        create_room_button.show()
+        name_input.hide()
+        start_button.hide()
+        break;
+
+        case 'GAME':
+        name_input.hide()
+        start_button.hide()
+        create_room_button.hide()
+
+        clearInterval(update_clock)
+        update_clock = setInterval(Update,1000/callRate)
+        break;
+    }
+}
+
+//#region ========================================== UI ACTIONS ==========================================
+function StartGame()
+{
+    this_player_name = name_input.elt.value
+
+    Scene('MENU')
+}
+
+var creating = false
+function CreateRoom()
+{
+    if(!creating)
+    {
+        socket.emit('CREATE_ROOM')
+    }
+
+    creating = true
+}
+
+//#endregion
 
 function Update()
 {
-    var myPlayer = players[socket.id]
-    
     // ========================================== PLAYER MOVEMENT =================================================
     if(mouseIsPressed)
     {
-        var deltaTime = 1/callsPerSecond
-        var speed = myPlayer.stats.speed
-        var oldPos = myPlayer.pos
-        
-        var vector = {x:mouseX-oldPos.x,y: mouseY-oldPos.y} //FROM PLAYER TO MOUSE
-        var magnitude = Vector2Magnitude(vector)
-        if(magnitude > 5)
-        {
-            var newPosDir = Vector2Divide(vector, magnitude) //direction vector
-            
-
-            var newPosDirMagnitude = deltaTime*speed
-            var finalMagnitude = Math.min(magnitude,newPosDirMagnitude)
-
-            var newPos = Vector2Addition(oldPos,Vector2Multiply(newPosDir,finalMagnitude))
-            
-            //limit
-            var box;
-
-            if(myPlayer.captured)
-            {
-                box = myPlayer.team==1 ? RED_PRISON_RECT : GREEN_PRISON_RECT
-            }
-            else
-            {
-                box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
-            }
-
-            var finalPos = PositionLimitedByBox(box,myPlayer.stats.diameter,newPos)
-            socket.emit('PLAYER_MOVED',finalPos)
-        }
+        socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
     }
 }
 
 function draw()
 {
-    timeElapsedSincePackage += 1000/frameRate()
 
-    // ========================================== UI - MAP =================================================
-    background(50, 89, 100);
-    
-    strokeWeight(1)
-    stroke(BLACK)
-
-    //DRAW RED
-    var fillColor = MAP_RED
-    fill(fillColor)
-    rect(0,0,CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height);
-    
-    //DRAW GREEN
-    fillColor = MAP_GREEN
-    fill(fillColor)
-    rect(CANVAS_DIMENSIONS.width/2,0,CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height);
-    
-    //DRAW RED PRISON
-    fillColor = PRISON_GREY
-    fill(fillColor)
-    rect(RED_PRISON_RECT.x,RED_PRISON_RECT.y,RED_PRISON_RECT.width,RED_PRISON_RECT.height)
-    
-    //DRAW GREEN PRISON
-    fillColor = PRISON_GREY
-    fill(fillColor)
-    rect(GREEN_PRISON_RECT.x,GREEN_PRISON_RECT.y,GREEN_PRISON_RECT.width,GREEN_PRISON_RECT.height)
-    
-    fillColor = WHITE
-    fill(fillColor)
-
-    // ========================================== UI - PLAYER =================================================
-
-    if(CONNECTED)
+    // ========================================== UI - GAME =================================================
+    if(CONNECTED_TO_ROOM && GAME_IN_PROGRESS)
     {
-        text(socket.id,10,20)
-       
-        var team = players[socket.id].team
-
-        if(team != null)
-        {
-            text("Team:" + team,10,30)
-        }
-    }
-
-    for(var playerID in players)
-    {
-        thisPlayer = players[playerID]
-     
-        fillColor = color(255,255,255)
-
-        var teamColor;
+        timeElapsedSincePackage += 1000/frameRate()
+        //#region ========================================== UI - MAP =================================================
+        background(50, 89, 100);
         
-        if (thisPlayer.team == 0)
-        {
-            teamColor = PLAYER_RED
-        } 
-        else
-        {
-            teamColor = PLAYER_GREEN
-        }
+        strokeWeight(1)
+        stroke(BLACK)
 
-        var strokeColor = color(0,0,0)
-        var weight = 1
-
-        if (thisPlayer.id == socket.id)
-        {
-            weight = 4
-            strokeColor = teamColor
-            fillColor = GOLD
-        }
-        else
-        {
-            weight = 1
-            strokeColor = BLACK
-            fillColor = teamColor
-        }
-        
+        //DRAW RED
+        var fillColor = MAP_RED
         fill(fillColor)
-        strokeWeight(weight)
-        stroke(strokeColor)
+        rect(0,0,CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height);
+        
+        //DRAW GREEN
+        fillColor = MAP_GREEN
+        fill(fillColor)
+        rect(CANVAS_DIMENSIONS.width/2,0,CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height);
+        
+        //DRAW RED PRISON
+        fillColor = PRISON_GREY
+        fill(fillColor)
+        rect(RED_PRISON_RECT.x,RED_PRISON_RECT.y,RED_PRISON_RECT.width,RED_PRISON_RECT.height)
+        
+        //DRAW GREEN PRISON
+        fillColor = PRISON_GREY
+        fill(fillColor)
+        rect(GREEN_PRISON_RECT.x,GREEN_PRISON_RECT.y,GREEN_PRISON_RECT.width,GREEN_PRISON_RECT.height)
+        
+        fillColor = WHITE
+        fill(fillColor)
+            // text(socket.id,10,20)
+            // var team = players[socket.id].team
+            // text("Team:" + team,10,30)
 
-        if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
+        //#endregion
+        //#region ========================================== UI - PLAYER =================================================
+        for(var playerID in players)
         {
-            ellipse(thisPlayer.pos.x,thisPlayer.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
-            continue
+            thisPlayer = players[playerID]
+        
+            fillColor = color(255,255,255)
+
+            var teamColor;
+            
+            if (thisPlayer.team == 0)
+            {
+                teamColor = PLAYER_RED
+            } 
+            else
+            {
+                teamColor = PLAYER_GREEN
+            }
+
+            var strokeColor = color(0,0,0)
+            var weight = 1
+
+            if (thisPlayer.id == socket.id)
+            {
+                weight = 4
+                strokeColor = teamColor
+                fillColor = GOLD
+            }
+            else
+            {
+                weight = 1
+                strokeColor = BLACK
+                fillColor = teamColor
+            }
+            
+            fill(fillColor)
+            strokeWeight(weight)
+            stroke(strokeColor)
+
+            if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
+            {
+                ellipse(thisPlayer.pos.x,thisPlayer.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+                continue
+            }
+
+            var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
+            var lerp_x = lerp(thisPlayer.old_pos.x,thisPlayer.pos.x,lerp_weight)
+            var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
+            var lerpPos = {x:lerp_x,y:lerp_y}
+
+            ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
         }
-
-        var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
-        var lerp_x = lerp(thisPlayer.old_pos.x,thisPlayer.pos.x,lerp_weight)
-        var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
-        var lerpPos = {x:lerp_x,y:lerp_y}
-
-        ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
-    }
-
-    // ========================================== UI - FLAGS =================================================
-    for(var flag of flags)
-    {
-        let team_flag_image = flag.team==0?red_flag_img : green_flag_img
-
-        if(Vector2Magnitude(Vector2Subtraction(flag.pos,flag.old_pos)) > LERP_TOLERANCE)
+        //#endregion
+        //#region ========================================== UI - FLAGS =================================================
+        for(var flag of flags)
         {
-            ellipse(flag.pos.x,flag.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
-            continue
+            let team_flag_image = flag.team==0?red_flag_img : green_flag_img
+
+            if(Vector2Magnitude(Vector2Subtraction(flag.pos,flag.old_pos)) > LERP_TOLERANCE)
+            {
+                ellipse(flag.pos.x,flag.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+                continue
+            }
+
+            var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
+            var lerp_x = lerp(flag.old_pos.x,flag.pos.x,lerp_weight)
+            var lerp_y = lerp(flag.old_pos.y,flag.pos.y,lerp_weight)
+            var lerpPos = {x:lerp_x,y:lerp_y}
+
+            image(team_flag_image, lerp_x-FLAG_HEIGHT/2,lerp_y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
         }
-
-        var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
-        var lerp_x = lerp(flag.old_pos.x,flag.pos.x,lerp_weight)
-        var lerp_y = lerp(flag.old_pos.y,flag.pos.y,lerp_weight)
-        var lerpPos = {x:lerp_x,y:lerp_y}
-
-        image(team_flag_image, lerp_x-FLAG_HEIGHT/2,lerp_y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
+        //#endregion
     }
 }
 
-socket.on('ON_CONNECTED',function(all_players){
-    players = all_players
+
+socket.on('ON_ROOM_CREATED',function(newNameSpace){
+    console.log('I CREATED A ROOM' + newNameSpace)  
+})
+
+socket.on('SET_NAMESPACE',function(newNameSpace){
+    
+    console.log('JOINING ROOM ' + newNameSpace)
+    socket = io(newNameSpace)
+    
+    socket.on('JOINED_ROOM',OnJoinedRoom)
+
+    // socket.on('FULL_PACKAGE',function(package){
+    //     console.log("RECEIVING PACKAGE")
+    //     // console.log(JSON.stringify(package))
+    // })
+})
+
+
+function OnJoinedRoom(roomName)
+{
+    console.log("CONNECTED TO ROOM:" + roomName)
+
+    socket.on('FULL_PACKAGE',ReceivePackage)
+    socket.on('PLAYER_DISCONNECTED',PlayerDisconnected)
+
     //UI
-    CONNECTED = true
-})
+    CONNECTED_TO_ROOM = true
+    GAME_IN_PROGRESS = true
+    Scene('GAME')
+}
 
-socket.on('PLAYER_DISCONNECTED',function(disconnected_player_data){
+function PlayerDisconnected(disconnected_player_data){
     delete players[disconnected_player_data.id]
-})
+}
 
+
+//#region GAME EVENTS
 var countDown = 3;
 var counterInterval;
 var previousPackageTime = 0
 var recentPackageTime = 0
 var timeElapsedSincePackage = 0
-socket.on('FULL_PACKAGE',function(package){
-
+function ReceivePackage(package){
     previousPackageTime = recentPackageTime
     recentPackageTime = Date.now()
     timeElapsedSincePackage = 0
@@ -324,9 +431,11 @@ socket.on('FULL_PACKAGE',function(package){
     {
         console.log(JSON.stringify(package['SCORE']))
     }
-})
+}
 
+//#endregion
 
+//#region HELPER FUNCTIONS
 function Vector2Addition(vec1,vec2)
 {
     return {x: vec1.x + vec2.x,y: vec1.y + vec2.y}
@@ -397,3 +506,8 @@ function PositionLimitedByBox(box,player_diameter,next_pos)
     var output_pos = {x: new_x,y: new_y}
     return output_pos
 }
+
+
+//#endregion
+
+

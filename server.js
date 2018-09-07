@@ -6,7 +6,19 @@ var io = require('socket.io').listen(http)
 
 const THIS_PLAYER_CONNECTED = 1
 
-const CANVAS_DIMENSIONS = {width: 1000,height: 600}
+const CANVAS_DIMENSIONS = {width: 1600,height: 800}
+const PLAYER_DIAMETER_STANDARD = 40
+const PLAYER_DIAMETER_MEDIUM = 30
+const PLAYER_DIAMETER_SMALL = 20
+
+const FLAG_HEIGHT = 40
+
+const PRISON_HEIGHT = 400
+const PRISON_WIDTH = 180
+const PRISON_PADDING = 30
+const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
+const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
+
 const SPAWN_PADDING = 70
 const RED_SPAWN = {x: SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
 const GREEN_SPAWN = {x:CANVAS_DIMENSIONS.width-SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
@@ -22,44 +34,138 @@ http.listen(3000, function(){
   console.log('listening on 3000');
 });
 
-var players = {}
-var flags = []
-var score = {
-  "0": 0,
-  "1": 0
-}
-
-var GAME_IN_PROGRESS = false
-
 
 var callRate = 10
+
+
+//#region SERVER LOBBY
+
+var lobby = io.of('/lobby')
+
+var rooms = {}
+
+function CreateRoom(creator_socket)
+{
+  var newRoomName = GetNewRoomName()
+  var newRoomSocket = io.of(newRoomName)
+  var newRoom = NewRoomObject(newRoomName)
+  rooms[newRoomName] = newRoom //ADD ROOM
+  InitializeGameRoom(newRoomName)
+  
+  creator_socket.emit('ON_ROOM_CREATED',newRoomName) //TELL CLIENT HE CREATED ROOM
+  creator_socket.emit('SET_NAMESPACE',newRoomName) //GET CLIENT TO CONNECT TO ROOM
+  
+  
+  newRoomSocket.on('connection',function(socket){ //SET CALLBACKS FOR ROOM
+    console.log('THIS ROOM JUST GOT A CONNECTION: ' + socket.id)
+        
+    NewPlayerConnectedToRoom(newRoomName,socket.id)
+
+    socket.emit('JOINED_ROOM',newRoomName)
+    socket.on('PLAYER_MOVED',function(request){
+
+      if(!rooms[newRoomName].GAME_IN_PROGRESS)
+      {
+        return
+      }
+
+      //============================== RECEIVE PLAYER REQUEST TO CHANGE POSITION ==============================
+      var thisPlayer = rooms[newRoomName].players[socket.id]              
+      var oldPos = thisPlayer.pos
+      
+      var vector = {x:request.x-oldPos.x,y: request.y-oldPos.y} //FROM PLAYER TO MOUSE
+      var magnitude = Vector2Magnitude(vector)
+      
+      if(magnitude > 5)
+      {
+          var newPosDir = Vector2Divide(vector, magnitude) //direction vector of where to head
+          
+          //PUSH TO DATA, UPDATE WILL OCCUR IN UPDATE QUEUE
+          rooms[newRoomName].players[socket.id].newPosDir = newPosDir
+          rooms[newRoomName].players[socket.id].newPosRequestMagnitude = magnitude //The request has a limit
+          rooms[newRoomName].players[socket.id].sprint = request.sprint
+      }
+    });
+
+    socket.on('disconnect',function(){
+
+      socket.broadcast.emit('PLAYER_DISCONNECTED',rooms[newRoomName].players[socket.id])
+      
+      console.log('PLAYER LEFT ROOM: ' + socket.id)
+      delete rooms[newRoomName].players[socket.id]
+
+      //if flag carrier disconnects, drop flag
+      //Should flag be dropped
+      for (var flag of rooms[newRoomName].flags) 
+      {
+        if (flag.captured && flag.capturer_id == socket.id) 
+        {
+          FlagDropped(newRoomName,flag)
+        }
+      }
+      
+      if(Object.keys(rooms[newRoomName].players).length == 0)
+      {
+        rooms[newRoomName] = null //delete the room
+      }
+    })
+  })
+
+}
+
+var roomNameCounter = 0
+function GetNewRoomName()
+{
+  roomNameCounter+=1
+  return "/room-" + roomNameCounter
+}
+
+
+//#endregion
+
 setInterval(Update,1000/callRate)
 
-var package = {}
+
 
 function Update()
 {
 
-  CheckPlayerCollision()
-  CheckWinCondition()
+  for(var roomName in rooms)
+  {
+    if(rooms[roomName] == null)
+    {
+      continue
+    }
 
+    UpdateFlagPosition(roomName)
+    UpdatePlayerPosition(roomName)
+    CheckPlayerCollision(roomName)
+    CheckWinCondition(roomName)
 
-  package['players'] = players
-  package['flags'] = flags
+    rooms[roomName].package['players'] = rooms[roomName].players
+    rooms[roomName].package['flags'] = rooms[roomName].flags
+    io.of(roomName).emit('FULL_PACKAGE',rooms[roomName].package)
 
-  io.sockets.emit('FULL_PACKAGE',package)
+    rooms[roomName].package = {}
+  }
+
+  // var copy = package
+  // setTimeout(() => {
+  //   Emit(copy)
+  // }, 6000);
   //reset package
-  package = {}
+  
 }
 
-function CheckPlayerCollision()
+
+function CheckPlayerCollision(roomName)
 {
-  for(var each_player_ID in players)
+  for(var each_player_ID in rooms[roomName].players)
   {
     //IF THIS WAS MY UPDATE => PLAYER RESPONSIBLE FOR HIS OWN COLLISIONS
-    var eachPlayer = players[each_player_ID]
+    var eachPlayer = rooms[roomName].players[each_player_ID]
 
-    for(var other_player_ID in players)
+    for(var other_player_ID in rooms[roomName].players)
     {
         //ignore if is same himself
         if(other_player_ID == each_player_ID)
@@ -67,7 +173,7 @@ function CheckPlayerCollision()
             continue
         }
 
-        var other_player = players[other_player_ID]
+        var other_player = rooms[roomName].players[other_player_ID]
         var vectorFromMeToPlayer = Vector2Subtraction(other_player.pos,eachPlayer.pos)
         var distanceFromMeToPlayer = Vector2Magnitude(vectorFromMeToPlayer)
         var minDistance = other_player.stats.diameter/2 + eachPlayer.stats.diameter/2
@@ -91,25 +197,25 @@ function CheckPlayerCollision()
                         if (eachPlayer.team == 1) //if it was my side
                         {
                             //he gets caught
-                            PlayerCaught(other_player)
+                            PlayerCaught(roomName,other_player)
 
                         }
                         else //it was his side
                         {
                             //i get caught
-                            PlayerCaught(eachPlayer)
+                            PlayerCaught(roomName,eachPlayer)
                         }
                     }
                     else {
                         if (eachPlayer.team == 0) //if it was his side
                         {
                             //he gets caught
-                            PlayerCaught(other_player)
+                            PlayerCaught(roomName,other_player)
                         }
                         else //it was his side
                         {
                             //i get caught
-                            PlayerCaught(eachPlayer)
+                            PlayerCaught(roomName,eachPlayer)
                         }
                     }
                 }
@@ -136,9 +242,9 @@ function CheckPlayerCollision()
   }
 }
 
-function CheckWinCondition()
+function CheckWinCondition(roomName)
 {
-  for(var flag of flags)
+  for(var flag of rooms[roomName].flags)
   {
     //============================== FLAG WIN CONDITION ==============================
     if(flag.pos.x > CANVAS_DIMENSIONS.width/2) //if on green side
@@ -146,9 +252,9 @@ function CheckWinCondition()
       if (flag.team == 0)
       {
         //win
-        TeamScored(1)
-        ResetMap()
-        BeginCountdown()
+        TeamScored(roomName,1)
+        ResetMap(roomName)
+        BeginCountdown(roomName)
       }
     }
     else
@@ -156,144 +262,151 @@ function CheckWinCondition()
       if (flag.team == 1)
       {
         //win
-        TeamScored(0)
-        ResetMap()
-        BeginCountdown()
+        TeamScored(roomName,0)
+        ResetMap(roomName)
+        BeginCountdown(roomName)
       }
     }
+  }
+}
+
+function UpdateFlagPosition(roomName)
+{
+  //============================== UPDATE FLAG DATA ==============================
+  for(var index in rooms[roomName].flags)
+  {
+    var flag = rooms[roomName].flags[index]
+
+    if(flag.captured)
+    {  
+      //============================== UPDATE FLAG POSITION ==============================
+      rooms[roomName].flags[index].pos = rooms[roomName].players[flag.capturer_id].pos
+    }
+    else
+    {
+      //============================== FLAG CAPTURING ==============================
+      for(var playerID in rooms[roomName].players)
+      {
+        if(ShouldFlagBeCaptured(rooms[roomName].players[playerID],flag))
+        {
+          FlagCapturedBy(rooms[roomName].players[playerID],flag)
+        }
+      }
+    }
+  }
+}
+
+function UpdatePlayerPosition(roomName)
+{
+  var deltaTime = 1000/callRate
+  for(var playerID in rooms[roomName].players)
+  {
+    var newPosDir = rooms[roomName].players[playerID].newPosDir
+    
+    if(newPosDir == null)
+    {
+      //Player did not request this round
+      continue
+    }
+
+    var thisPlayer = rooms[roomName].players[playerID]
+
+    var requestMagnitude = thisPlayer.newPosRequestMagnitude
+    var multiplier = thisPlayer.sprint ? 2: 1
+    var newPosDirMagnitude = deltaTime*thisPlayer.stats.speed/1000*multiplier
+    var finalMagnitude = Math.min(requestMagnitude,newPosDirMagnitude)
+
+    var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
+    
+    //limit
+    var box;
+
+    if(thisPlayer.captured)
+    {
+        box = thisPlayer.team==1 ? RED_PRISON_RECT : GREEN_PRISON_RECT
+    }
+    else
+    {
+        box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
+    }
+
+    var finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,newPos)
+    rooms[roomName].players[playerID].pos = finalPos
+    rooms[roomName].players[playerID].newPosDir = null //position has been committed this frame, dont need it anymore
+    rooms[roomName].players[playerID].newPosRequestMagnitude = null
   }
 }
 
 
 io.on('connection', function (socket) {
-
-  if(flags.length == 0)
-  {
-    var greenFlag = NewFlagObject(GREEN_SPAWN,1)
-    var redFlag = NewFlagObject(RED_SPAWN,0)
-    flags.push(greenFlag)
-    flags.push(redFlag)
-
-    GAME_IN_PROGRESS = true
-  }
-
-  console.log('a user connected: ' + socket.id);
-
-  var startPos = {x: 200, y: 200}
-
-  var teamToAddPlayerTo = DecideNewPlayerTeam();
-  var newPlayer = NewPlayerObject(socket.id,startPos,teamToAddPlayerTo);
-
-  newPlayer.pos = teamToAddPlayerTo==0? RED_SPAWN : GREEN_SPAWN
-  players[socket.id] = newPlayer; 
-
-  socket.emit('ON_CONNECTED',players)
+  console.log('User joined lobby: ' + socket.id);
   
+  socket.on('CREATE_ROOM',function(){
+    CreateRoom(socket)
+  })
+
   socket.on('disconnect', function () {
-    
-    socket.broadcast.emit('PLAYER_DISCONNECTED',players[socket.id])
-    delete players[socket.id]
-
-    //if flag carrier disconnects, drop flag
-    //Should flag be dropped
-    var flagNeedsUpdate = false
-    for (var flag of flags) 
-    {
-      if (flag.captured && flag.capturer_id == socket.id) 
-      {
-        FlagDropped(flag)
-        flagNeedsUpdate = true
-      }
-    }
-    
-    console.log('user disconnected: ' + socket.id);
+    console.log('User left lobby: ' + socket.id);
   });
-
-  socket.on('PLAYER_MOVED',function(pos){
-
-    if(!GAME_IN_PROGRESS)
-    {
-      return
-    }
-
-    //============================== UPDATE PLAYER POSITION ==============================
-    players[socket.id].pos = pos
-
-    //============================== UPDATE FLAG DATA ==============================
-    for(var index in flags)
-    {
-      var flag = flags[index]
-
-      if(flag.captured)
-      {  
-        //============================== UPDATE FLAG POSITION ==============================
-        flags[index].pos = players[flag.capturer_id].pos
-      }
-      else
-      {
-        //============================== FLAG CAPTURING ==============================
-        if(ShouldFlagBeCaptured(players[socket.id],flag))
-        {
-          FlagCapturedBy(players[socket.id],flag)
-        }
-      }
-    }
-    
-
-  });
-   
 });
 
-function PlayerCaught(player_caught)
+//#region =================================== GAME SERVER EVENTS ===================================
+function InitializeGameRoom(roomName)
+{
+  var greenFlag = NewFlagObject(GREEN_SPAWN,1)
+  var redFlag = NewFlagObject(RED_SPAWN,0)
+  rooms[roomName].flags.push(greenFlag)
+  rooms[roomName].flags.push(redFlag)
+  rooms[roomName].GAME_IN_PROGRESS = true
+}
+
+function NewPlayerConnectedToRoom(roomName,socket_id)
+{
+  var room = rooms[roomName]
+  var count0 = room.teams_count[0]
+  var count1 = room.teams_count[1]
+  var teamToAddPlayerTo = 0 //red
+  //if(room.teams_count[0] > rooms.teams_count[1])
+  if(count0 < count1)
+  {
+    teamToAddPlayerTo = 1 //green
+    rooms[roomName].teams_count[teamToAddPlayerTo] += 1
+  }
+
+  var spawnPos = teamToAddPlayerTo==0? RED_SPAWN : GREEN_SPAWN
+  var newPlayer = NewPlayerObject(socket_id,spawnPos,teamToAddPlayerTo);
+
+  rooms[roomName].players[socket_id] = newPlayer; 
+}
+
+//#endregion
+
+//#region =================================== LOBBY SERVER EVENTS ===================================
+
+
+//#endregion
+
+//#region =================================== LOCAL GAME MANAGEMENT ===================================
+
+
+function PlayerCaught(roomName,player_caught)
 {
    //Should flag be dropped
-   var flagNeedsUpdate = false
-   for(var flag of flags)
+   for(var flag of rooms[roomName].flags)
    {
      if(flag.captured && flag.capturer_id == player_caught.id)
      {
        FlagDropped(flag)
-       flagNeedsUpdate = true
      }
    }
 
    //Update player state (flag drop first)
-   players[player_caught.id].captured = true
-   players[player_caught.id].pos = player_caught.team==0?GREEN_SPAWN:RED_SPAWN
+   rooms[roomName].players[player_caught.id].captured = true
+   rooms[roomName].players[player_caught.id].pos = player_caught.team==0?GREEN_SPAWN:RED_SPAWN
 }
 
-
-function PlayerFreed(player_freed){
-  players[player_freed.id].captured = false
-}
-
-function DecideNewPlayerTeam()
-{
-    var red_count = 0
-    var green_count = 0
-
-    for(var playerID in players)
-    {
-      var player = players[playerID]
-
-      if (player.team == 0)
-      {
-        red_count+=1 
-      }
-      else
-      {
-        green_count+=1
-      } 
-    }
-
-    if(green_count <= red_count)
-    {
-      return 1
-    }
-    else
-    {
-      return 0
-    }
+function PlayerFreed(roomName,player_freed){
+  rooms[roomName].players[player_freed.id].captured = false
 }
 
 function ShouldFlagBeCaptured(player,flag)
@@ -304,7 +417,7 @@ function ShouldFlagBeCaptured(player,flag)
   }
 
   var distancePlayerFromFlag = Vector2Magnitude(Vector2Subtraction(player.pos,flag.pos))
-  var flagEstimatedWidth = 10
+  var flagEstimatedWidth = FLAG_HEIGHT
   var minDistFromFlag = player.stats.diameter/2 + flagEstimatedWidth
 
   if(distancePlayerFromFlag <= minDistFromFlag)
@@ -331,43 +444,47 @@ function FlagDropped(flag)
   flag.capturer_id = ""
 }
 
-function TeamScored(team)
+function TeamScored(roomName,team)
 {
-  score[team] += 1
-  SendAllClients('SCORE',score)
+  rooms[roomName].score[team] += 1
+  SendAllClients(roomName,'SCORE',rooms[roomName].score)
 }
 
-function ResetMap()
+function ResetMap(roomName)
 {
-  for(var playerID in players)
+  for(var playerID in rooms[roomName].players)
   {
-    players[playerID].pos = players[playerID].team==0 ? RED_SPAWN : GREEN_SPAWN 
+    rooms[roomName].players[playerID].pos = rooms[roomName].players[playerID].team==0 ? RED_SPAWN : GREEN_SPAWN 
   }
 
-  for(var index in flags)
+  for(var index in rooms[roomName].flags)
   {
-    FlagDropped(flags[index])
-    flags[index].pos = flags[index].team==0? RED_SPAWN : GREEN_SPAWN
+    FlagDropped(rooms[roomName].flags[index])
+    rooms[roomName].flags[index].pos = rooms[roomName].flags[index].team==0? RED_SPAWN : GREEN_SPAWN
   }
 
-  GAME_IN_PROGRESS = false
+  rooms[roomName].GAME_IN_PROGRESS = false
   // io.sockets.emit('RESET',players,flags)
-  SendAllClients('RESET',{players: players,flags: flags})
+  SendAllClients(roomName, 'RESET',{players: rooms[roomName].players,flags: rooms[roomName].flags})
 }
 
-function BeginCountdown()
+function BeginCountdown(roomName)
 {
   //SendAllClients('COUNTDOWN_BEGIN',1)
-  SendAllClients('COUNTDOWN_BEGIN',1)
+  SendAllClients(roomName,'COUNTDOWN_BEGIN',1)
 
   // io.sockets.emit('SERVER_EVENT',ServerMessageObject('COUNTDOWN_BEGIN'))
   setTimeout(function(){
     //GAME STARTED 
-    GAME_IN_PROGRESS = true
-    SendAllClients('GAME_BEGIN',1)
+    rooms[roomName].GAME_IN_PROGRESS = true
+    SendAllClients(roomName,'GAME_BEGIN',1)
     // io.sockets.emit('SERVER_EVENT',ServerMessageObject('GAME_BEGIN'))
   },3000)
 }
+
+//#endregion
+
+//#region =================================== OBJECT CREATION ===================================
 
 function NewPlayerObject(id,startPos,team)
 {
@@ -378,8 +495,9 @@ function NewPlayerObject(id,startPos,team)
     team : team,
     captured : false,
     hasFlag : false,
+    sprint: false,
     stats : {
-      speed : 2000,
+      speed : 300,
       diameter : 40,
     }
   }
@@ -397,6 +515,28 @@ function NewFlagObject(startPos,team)
 }
 
 
+function NewRoomObject(name)
+{
+  return {
+    name: name,
+    GAME_IN_PROGRESS: false,
+    players : {},
+    flags: [],
+    package : {},
+    score: {
+      0: 0,
+      1: 0
+    },
+    teams_count:{
+      0: 0,
+      1: 1
+    }
+  }
+}
+
+//#endregion
+
+//#region =================================== HELPER FUNCTIONS ===================================
 function Vector2Addition(vec1,vec2)
 {
     return {x: vec1.x + vec2.x,y: vec1.y + vec2.y}
@@ -422,8 +562,55 @@ function Vector2Magnitude(vec)
     return Math.sqrt(Math.pow(vec.x,2) + Math.pow(vec.y,2))
 }
 
-
-function SendAllClients(key,params)
+function Box(x,y,width,height)
 {
-  package[key] = params
+    return {x: x,y: y,width: width,height: height}
+}
+
+function PositionLimitedByBox(box,player_diameter,next_pos)
+{
+    var x = box.x
+    var y = box.y
+    var width = box.width
+    var height = box.height
+
+    var new_x = 0
+    var new_y = 0
+    var player_radius = player_diameter/2
+
+    if(next_pos.x-player_radius < x) //left bound
+    {
+        new_x = x+player_radius
+    }
+    else if(next_pos.x+player_radius > x+width) //right bound
+    {
+        new_x = x+width-player_radius
+    }
+    else
+    {
+        new_x = next_pos.x
+    }
+
+    if(next_pos.y-player_radius < y) //top bound
+    {
+        new_y = y+player_radius
+    }
+    else if(next_pos.y+player_radius > y+height) //bottom bound
+    {
+        new_y = y+height-player_radius
+    }
+    else
+    {
+        new_y = next_pos.y
+    }
+
+    var output_pos = {x: new_x,y: new_y}
+    return output_pos
+}
+
+//#endregion
+
+function SendAllClients(roomName,key,params)
+{
+  rooms[roomName].package[key] = params
 }
