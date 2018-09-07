@@ -32,16 +32,136 @@ var score = {
 var GAME_IN_PROGRESS = false
 
 
-var callRate = 60
+var callRate = 10
 setInterval(Update,1000/callRate)
 
-var package = []
+var package = {}
 
 function Update()
 {
+
+  CheckPlayerCollision()
+  CheckWinCondition()
+
+
+  package['players'] = players
+  package['flags'] = flags
+
   io.sockets.emit('FULL_PACKAGE',package)
   //reset package
-  package = []
+  package = {}
+}
+
+function CheckPlayerCollision()
+{
+  for(var each_player_ID in players)
+  {
+    //IF THIS WAS MY UPDATE => PLAYER RESPONSIBLE FOR HIS OWN COLLISIONS
+    var eachPlayer = players[each_player_ID]
+
+    for(var other_player_ID in players)
+    {
+        //ignore if is same himself
+        if(other_player_ID == each_player_ID)
+        {
+            continue
+        }
+
+        var other_player = players[other_player_ID]
+        var vectorFromMeToPlayer = Vector2Subtraction(other_player.pos,eachPlayer.pos)
+        var distanceFromMeToPlayer = Vector2Magnitude(vectorFromMeToPlayer)
+        var minDistance = other_player.stats.diameter/2 + eachPlayer.stats.diameter/2
+        //NOTE: DO THIS CHECK ONLY FOR THIS PLAYER
+        //      MEANING == CHECK THAT THIS PLAYER HAS COLLIDED WITH OTHERS ONLY
+        
+        // console.log(minDistance)
+        // console.log(distanceFromMeToPlayer)
+        if(distanceFromMeToPlayer < minDistance)
+        {
+            var dirVector = Vector2Divide(vectorFromMeToPlayer,distanceFromMeToPlayer)
+            var pointOfContact = Vector2Addition(eachPlayer.pos,Vector2Multiply(dirVector,eachPlayer.stats.diameter/2))  //NOTE: USES MY PLAYER DIAMETER BECAUSE IM CHECKING FROM MYSELF...??
+
+            //POINT OF COLLISION
+            if(other_player.team != eachPlayer.team) //SMTH MUST HAPPEN
+            {
+                if (other_player.captured == false && eachPlayer.captured == false) 
+                {
+                    if (pointOfContact.x > CANVAS_DIMENSIONS.width / 2) //if contact green side and i am green
+                    {
+                        if (eachPlayer.team == 1) //if it was my side
+                        {
+                            //he gets caught
+                            PlayerCaught(other_player)
+
+                        }
+                        else //it was his side
+                        {
+                            //i get caught
+                            PlayerCaught(eachPlayer)
+                        }
+                    }
+                    else {
+                        if (eachPlayer.team == 0) //if it was his side
+                        {
+                            //he gets caught
+                            PlayerCaught(other_player)
+                        }
+                        else //it was his side
+                        {
+                            //i get caught
+                            PlayerCaught(eachPlayer)
+                        }
+                    }
+                }
+            }
+            else
+                {
+                    //FREEEEEEEEEEDOOMMMMMMMM
+                    if(!(other_player.captured && eachPlayer.captured)) //if not both captured
+                    {
+                        if(other_player.captured) //if he was the one captured
+                        {
+                          PlayerFreed(other_player)
+                        }
+                        else //if i was captured
+                        {
+                          PlayerFreed(eachPlayer)
+                        }
+                    }
+                }
+
+        }
+
+    }
+  }
+}
+
+function CheckWinCondition()
+{
+  for(var flag of flags)
+  {
+    //============================== FLAG WIN CONDITION ==============================
+    if(flag.pos.x > CANVAS_DIMENSIONS.width/2) //if on green side
+    {
+      if (flag.team == 0)
+      {
+        //win
+        TeamScored(1)
+        ResetMap()
+        BeginCountdown()
+      }
+    }
+    else
+    {
+      if (flag.team == 1)
+      {
+        //win
+        TeamScored(0)
+        ResetMap()
+        BeginCountdown()
+      }
+    }
+  }
 }
 
 
@@ -68,8 +188,6 @@ io.on('connection', function (socket) {
   players[socket.id] = newPlayer; 
 
   socket.emit('ON_CONNECTED',players)
-  socket.emit('FLAGS_CREATED',flags)
-  socket.broadcast.emit('NEW_PLAYER_CONNECTED',players)
   
   socket.on('disconnect', function () {
     
@@ -87,11 +205,6 @@ io.on('connection', function (socket) {
         flagNeedsUpdate = true
       }
     }
-
-    if (flagNeedsUpdate) 
-    {
-      io.sockets.emit('FLAGS_DATA_UPDATED', flags);
-    }
     
     console.log('user disconnected: ' + socket.id);
   });
@@ -103,19 +216,10 @@ io.on('connection', function (socket) {
       return
     }
 
-    var player = players[socket.id]
-    player.pos = pos
+    //============================== UPDATE PLAYER POSITION ==============================
+    players[socket.id].pos = pos
 
-
-    var item = {
-      name : 'PLAYERS_DATA_UPDATE',
-      params: player
-    }
-    package.push(item)
-    
-    // io.sockets.emit('PLAYERS_DATA_UPDATE',player); //update this one player
-
-    var flagNeedsUpdate = false
+    //============================== UPDATE FLAG DATA ==============================
     for(var index in flags)
     {
       var flag = flags[index]
@@ -124,81 +228,44 @@ io.on('connection', function (socket) {
       {  
         //============================== UPDATE FLAG POSITION ==============================
         flags[index].pos = players[flag.capturer_id].pos
-        flagNeedsUpdate = true
-
-        //============================== FLAG WIN CONDITION ==============================
-        if(flag.pos.x > CANVAS_DIMENSIONS.width/2) //if on green side
-        {
-          if (flag.team == 0)
-          {
-            //win
-            TeamScored(1)
-            ResetMap()
-            BeginCountdown()
-          }
-        }
-        else
-        {
-          if (flag.team == 1)
-          {
-            //win
-            TeamScored(0)
-            ResetMap()
-            BeginCountdown()
-          }
-        }
       }
       else
       {
         //============================== FLAG CAPTURING ==============================
-        if(ShouldFlagBeCaptured(player,flag))
+        if(ShouldFlagBeCaptured(players[socket.id],flag))
         {
-          FlagCapturedBy(player,flag)
-          flagNeedsUpdate = true
+          FlagCapturedBy(players[socket.id],flag)
         }
       }
     }
-
-    //============================== FLAG UPDATING ==============================
-    if(flagNeedsUpdate)
-    {
-      io.sockets.emit('FLAGS_DATA_UPDATED',flags);
-    }
-  });
-
-  socket.on('PLAYER_CAUGHT',function(player_caught){
-    //Should flag be dropped
-    var flagNeedsUpdate = false
-    for(var flag of flags)
-    {
-      if(flag.captured && flag.capturer_id == player_caught.id)
-      {
-        FlagDropped(flag)
-        flagNeedsUpdate = true
-      }
-    }
-  
-    if(flagNeedsUpdate)
-    {
-      io.sockets.emit('FLAGS_DATA_UPDATED',flags);
-    }
-
-    //Update player state (flag drop first)
-    var player = players[player_caught.id]
-    player.captured = true
-    player.pos = player_caught.team==0?GREEN_SPAWN:RED_SPAWN
     
-    //Update player position
-    io.sockets.emit('PLAYERS_DATA_UPDATE',player);
-  })
 
-  socket.on('PLAYER_FREED',function(player_freed){
-    var player = players[player_freed.id]
-    player.captured = false
-
-    io.sockets.emit('PLAYERS_DATA_UPDATE',player);
-  })
+  });
+   
 });
+
+function PlayerCaught(player_caught)
+{
+   //Should flag be dropped
+   var flagNeedsUpdate = false
+   for(var flag of flags)
+   {
+     if(flag.captured && flag.capturer_id == player_caught.id)
+     {
+       FlagDropped(flag)
+       flagNeedsUpdate = true
+     }
+   }
+
+   //Update player state (flag drop first)
+   players[player_caught.id].captured = true
+   players[player_caught.id].pos = player_caught.team==0?GREEN_SPAWN:RED_SPAWN
+}
+
+
+function PlayerFreed(player_freed){
+  players[player_freed.id].captured = false
+}
 
 function DecideNewPlayerTeam()
 {
@@ -229,8 +296,6 @@ function DecideNewPlayerTeam()
     }
 }
 
-
-
 function ShouldFlagBeCaptured(player,flag)
 {
   if(player.team == flag.team)
@@ -242,7 +307,7 @@ function ShouldFlagBeCaptured(player,flag)
   var flagEstimatedWidth = 10
   var minDistFromFlag = player.stats.diameter/2 + flagEstimatedWidth
 
-  if(distancePlayerFromFlag <= flagEstimatedWidth)
+  if(distancePlayerFromFlag <= minDistFromFlag)
   {
     return true
   }
@@ -269,7 +334,7 @@ function FlagDropped(flag)
 function TeamScored(team)
 {
   score[team] += 1
-  console.log(JSON.stringify(score))
+  SendAllClients('SCORE',score)
 }
 
 function ResetMap()
@@ -286,25 +351,22 @@ function ResetMap()
   }
 
   GAME_IN_PROGRESS = false
-  io.sockets.emit('RESET',players,flags)
+  // io.sockets.emit('RESET',players,flags)
+  SendAllClients('RESET',{players: players,flags: flags})
 }
 
 function BeginCountdown()
 {
-  io.sockets.emit('SERVER_EVENT',ServerMessageObject('COUNTDOWN_BEGIN'))
+  //SendAllClients('COUNTDOWN_BEGIN',1)
+  SendAllClients('COUNTDOWN_BEGIN',1)
+
+  // io.sockets.emit('SERVER_EVENT',ServerMessageObject('COUNTDOWN_BEGIN'))
   setTimeout(function(){
     //GAME STARTED 
     GAME_IN_PROGRESS = true
-    io.sockets.emit('SERVER_EVENT',ServerMessageObject('GAME_BEGIN'))
+    SendAllClients('GAME_BEGIN',1)
+    // io.sockets.emit('SERVER_EVENT',ServerMessageObject('GAME_BEGIN'))
   },3000)
-}
-
-
-function ServerMessageObject(code)
-{
-  return {
-    what: code
-  }
 }
 
 function NewPlayerObject(id,startPos,team)
@@ -317,7 +379,7 @@ function NewPlayerObject(id,startPos,team)
     captured : false,
     hasFlag : false,
     stats : {
-      speed : 400,
+      speed : 2000,
       diameter : 40,
     }
   }
@@ -358,4 +420,10 @@ function Vector2Divide(vec,value)
 function Vector2Magnitude(vec)
 {
     return Math.sqrt(Math.pow(vec.x,2) + Math.pow(vec.y,2))
+}
+
+
+function SendAllClients(key,params)
+{
+  package[key] = params
 }

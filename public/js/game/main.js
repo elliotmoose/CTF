@@ -15,6 +15,8 @@ const PRISON_PADDING = 30
 const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
 const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
 
+const LERP_TOLERANCE = 150
+
 //COLORS
 var MAP_GREEN;
 var MAP_RED;
@@ -34,8 +36,6 @@ var socket = io();
 var flags = [];
 var players = {};
 
-
-var controller;
 var CONNECTED = false
 
 function preload()
@@ -46,7 +46,6 @@ function preload()
 
 function setup()
 {   
-
     frameRate(60)
     MAP_GREEN = color(42, 130, 62)
     MAP_RED = color(155, 49, 49)
@@ -57,7 +56,6 @@ function setup()
     PLAYER_GREEN = color(80, 186, 104)//green
     PRISON_GREY = color(50,90)
 
-    controller = new PlayerController()
     createCanvas(CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height)
 
     setInterval(Update,1000/callsPerSecond)
@@ -76,11 +74,15 @@ function Update()
         
         var vector = {x:mouseX-oldPos.x,y: mouseY-oldPos.y} //FROM PLAYER TO MOUSE
         var magnitude = Vector2Magnitude(vector)
-        if(magnitude > 2)
+        if(magnitude > 5)
         {
             var newPosDir = Vector2Divide(vector, magnitude) //direction vector
             
-            var newPos = Vector2Addition(oldPos,Vector2Multiply(newPosDir,deltaTime*speed))
+
+            var newPosDirMagnitude = deltaTime*speed
+            var finalMagnitude = Math.min(magnitude,newPosDirMagnitude)
+
+            var newPos = Vector2Addition(oldPos,Vector2Multiply(newPosDir,finalMagnitude))
             
             //limit
             var box;
@@ -95,15 +97,15 @@ function Update()
             }
 
             var finalPos = PositionLimitedByBox(box,myPlayer.stats.diameter,newPos)
-            controller.SendNewPos(finalPos);
+            socket.emit('PLAYER_MOVED',finalPos)
         }
     }
 }
 
 function draw()
 {
-    
-    
+    timeElapsedSincePackage += 1000/frameRate()
+
     // ========================================== UI - MAP =================================================
     background(50, 89, 100);
     
@@ -183,17 +185,147 @@ function draw()
         fill(fillColor)
         strokeWeight(weight)
         stroke(strokeColor)
-        ellipse(thisPlayer.pos.x,thisPlayer.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
-        
+
+        if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
+        {
+            ellipse(thisPlayer.pos.x,thisPlayer.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+            continue
+        }
+
+        var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
+        var lerp_x = lerp(thisPlayer.old_pos.x,thisPlayer.pos.x,lerp_weight)
+        var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
+        var lerpPos = {x:lerp_x,y:lerp_y}
+
+        ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
     }
 
     // ========================================== UI - FLAGS =================================================
     for(var flag of flags)
     {
         let team_flag_image = flag.team==0?red_flag_img : green_flag_img
-        image(team_flag_image, flag.pos.x-FLAG_HEIGHT/2,flag.pos.y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
+
+        if(Vector2Magnitude(Vector2Subtraction(flag.pos,flag.old_pos)) > LERP_TOLERANCE)
+        {
+            ellipse(flag.pos.x,flag.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+            continue
+        }
+
+        var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
+        var lerp_x = lerp(flag.old_pos.x,flag.pos.x,lerp_weight)
+        var lerp_y = lerp(flag.old_pos.y,flag.pos.y,lerp_weight)
+        var lerpPos = {x:lerp_x,y:lerp_y}
+
+        image(team_flag_image, lerp_x-FLAG_HEIGHT/2,lerp_y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
     }
 }
+
+socket.on('ON_CONNECTED',function(all_players){
+    players = all_players
+    //UI
+    CONNECTED = true
+})
+
+socket.on('PLAYER_DISCONNECTED',function(disconnected_player_data){
+    delete players[disconnected_player_data.id]
+})
+
+var countDown = 3;
+var counterInterval;
+var previousPackageTime = 0
+var recentPackageTime = 0
+var timeElapsedSincePackage = 0
+socket.on('FULL_PACKAGE',function(package){
+
+    previousPackageTime = recentPackageTime
+    recentPackageTime = Date.now()
+    timeElapsedSincePackage = 0
+
+    if(package['players'] != null)
+    {
+        var oldPositions = {}
+        for(var playerID in players)
+        {
+            oldPositions[playerID] = players[playerID].pos
+        }
+
+        players = package['players']
+        
+        for(var playerID in players)
+        {
+            players[playerID].old_pos = oldPositions[playerID]
+
+            if(oldPositions[playerID] == null) //just joined
+            {
+                players[playerID].old_pos = players[playerID].pos
+            }
+        }
+    }
+
+    if(package['flags'] != null)
+    {
+        var oldPositions = []
+        for(var index in flags)
+        {
+            oldPositions[index] = flags[index].pos
+        }
+
+        flags = package['flags']
+        
+        for(var index in flags)
+        {
+            flags[index].old_pos = oldPositions[index]
+
+            if(oldPositions[index] == null) //just joined
+            {
+                flags[index].old_pos = flags[index].pos
+            }
+        }
+    }
+
+    if(package['RESET'] != null)
+    {
+        players = package['RESET'].players
+        flags = package['RESET'].flags
+
+        for(var index in flags)
+        {
+            flags[index].old_pos = flags[index].pos
+        }
+    }
+
+    if(package["COUNTDOWN_BEGIN"] != null)
+    {
+        countingDown = true
+        countDown = 3
+        console.log(countDown)
+        countDown-=1
+
+        if(countDown == 0)
+        {
+            console.log('LOCAL GAME READY')
+        }
+        else
+        {
+            counterInterval = setInterval(function(){
+                console.log(countDown)
+                countDown-=1
+            },1000)
+        }
+    }
+
+    if(package['GAME_BEGIN'] != null)
+    {
+        clearInterval(counterInterval)
+        console.log('LOCAL GAME READY')
+    }
+
+    if(package["SCORE"] != null)
+    {
+        console.log(JSON.stringify(package['SCORE']))
+    }
+})
+
 
 function Vector2Addition(vec1,vec2)
 {
@@ -265,188 +397,3 @@ function PositionLimitedByBox(box,player_diameter,next_pos)
     var output_pos = {x: new_x,y: new_y}
     return output_pos
 }
-
-// function Vector2Magnitude(x,y)
-// {
-//     return Math.sqrt(Math.pow(x,2) + Math.pow(y,2))
-// }
-
-function PlayerController()
-{
-   this.SendNewPos = function(pos)
-   {
-       socket.emit('PLAYER_MOVED',pos)
-   } 
-}
-
-socket.on('ON_CONNECTED',function(all_players){
-    players = all_players
-
-    //UI
-    CONNECTED = true
-})
-
-socket.on('FLAGS_CREATED',function(all_flags){
-    flags = all_flags
-})
-
-socket.on('NEW_PLAYER_CONNECTED',function(all_players){
-    players = all_players
-})
-
-socket.on('PLAYER_DISCONNECTED',function(disconnected_player_data){
-    delete players[disconnected_player_data.id]
-})
-
-var countDown = 3;
-var counterInterval;
-socket.on('SERVER_EVENT',function(message){
-    console.log(message.what)
-    switch(message.what)
-    {
-        case 'COUNTDOWN_BEGIN':
-        countingDown = true
-        countDown = 3
-        console.log(countDown)
-        countDown-=1
-
-        if(countDown == 0)
-        {
-            console.log('LOCAL GAME READY')
-        }
-        else
-        {
-            counterInterval = setInterval(function(){
-                console.log(countDown)
-                countDown-=1
-            },1000)
-        }
-        
-        break;
-        
-        case 'GAME_BEGIN':
-            clearInterval(counterInterval)
-            console.log('LOCAL GAME READY')
-        break;
-    }
-
-})
-
-socket.on('PLAYERS_DATA_UPDATE',function(player_data){
-    if (players[player_data.id] != null)
-    {
-        players[player_data.id] = player_data
-    }
-    else
-    {
-        console.log("Cant find player: " + player_data.id)
-    }
-
-
-    //IF THIS WAS MY UPDATE => PLAYER RESPONSIBLE FOR HIS OWN COLLISIONS
-    if(player_data.id == socket.id)
-    {
-        var myPlayer = players[socket.id]
-
-        for(var playerID in players)
-        {
-            //ignore if is thisPlayer
-            if(playerID == socket.id)
-            {
-                continue
-            }
-
-            var player = players[playerID]
-            var vectorFromMeToPlayer = Vector2Subtraction(player.pos,myPlayer.pos)
-            var distanceFromMeToPlayer = Vector2Magnitude(vectorFromMeToPlayer)
-            var minDistance = player.stats.diameter/2 + myPlayer.stats.diameter/2
-            //NOTE: DO THIS CHECK ONLY FOR THIS PLAYER
-            //      MEANING == CHECK THAT THIS PLAYER HAS COLLIDED WITH OTHERS ONLY
-            
-            // console.log(minDistance)
-            // console.log(distanceFromMeToPlayer)
-            if(distanceFromMeToPlayer < minDistance)
-            {
-                var dirVector = Vector2Divide(vectorFromMeToPlayer,distanceFromMeToPlayer)
-                var pointOfContact = Vector2Addition(myPlayer.pos,Vector2Multiply(dirVector,myPlayer.stats.diameter/2))  //NOTE: USES MY PLAYER DIAMETER BECAUSE IM CHECKING FROM MYSELF...??
-
-                //POINT OF COLLISION
-
-                if(player.team != myPlayer.team) //SMTH MUST HAPPEN
-                {
-                    if (player.captured == false && myPlayer.captured == false) 
-                    {
-                        if (pointOfContact.x > CANVAS_DIMENSIONS.width / 2) //if contact green side and i am green
-                        {
-                            if (myPlayer.team == 1) //if it was my side
-                            {
-                                //he gets caught
-                                socket.emit('PLAYER_CAUGHT', player)
-                            }
-                            else //it was his side
-                            {
-                                //i get caught
-                                socket.emit('PLAYER_CAUGHT', myPlayer)
-                            }
-                        }
-                        else {
-                            if (myPlayer.team == 0) //if it was his side
-                            {
-                                //he gets caught
-                                socket.emit('PLAYER_CAUGHT', player)
-                            }
-                            else //it was his side
-                            {
-                                //i get caught
-                                socket.emit('PLAYER_CAUGHT', myPlayer)
-                            }
-                        }
-                    }
-                }
-                else
-                    {
-                        //FREEEEEEEEEEDOOMMMMMMMM
-                        if(!(player.captured && myPlayer.captured)) //if not both captured
-                        {
-                            if(player.captured) //if he was the one captured
-                            {
-                                socket.emit('PLAYER_FREED', player) //free him
-                            }
-                            else //if i was captured
-                            {
-                                socket.emit('PLAYER_FREED', myPlayer) //free me
-                            }
-                        }
-                    }
-
-            }
-
-        }
-    }
-})
-
-socket.on('FLAGS_DATA_UPDATED',function(all_flags){
-    flags = all_flags
-})
-
-
-socket.on('RESET',function(all_players,all_flags){
-    players = all_players
-    flags = all_flags
-})
-
-//PlayerObject Template
-// {
-//     id : "",
-
-//     pos : {
-//         x: 0,
-//         y: 0 
-//     },
-
-//     stats: 
-//     {
-//         speed : 100
-//     }
-
-// }
