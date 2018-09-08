@@ -1,11 +1,20 @@
-const THIS_PLAYER_CONNECTED = 1
 const callRate = 20
+const LERP_TOLERANCE = 150
+// ============================================ UI ============================================ 
 
-//UI
+//game
+var game_menu_item_width = 100
+var game_menu_item_height = 50
+var eventsPadding = 16
+
+var scoreFontSize = 30
+var scoreTopPadding = 30
+
 const CANVAS_DIMENSIONS = {width: 1600,height: 800}
 const PLAYER_DIAMETER_STANDARD = 40
 const PLAYER_DIAMETER_MEDIUM = 30
 const PLAYER_DIAMETER_SMALL = 20
+const DOCUMENT_MARGIN = 8
 
 const FLAG_HEIGHT = 40
 
@@ -15,9 +24,20 @@ const PRISON_PADDING = 30
 const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
 const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
 
-const LERP_TOLERANCE = 150
+var CANVAS_HORIZONTAL_OFFSET = (window.innerWidth-CANVAS_DIMENSIONS.width)/2;
+var CANVAS_VERT_OFFSET = 22;
 
-//COLORS
+//menu
+var menuItemWidth = 300
+var menuItemHeight = 50
+
+
+
+
+var p5setup = false
+
+// ============================================ COLORS ============================================ 
+var CANVAS_BG;
 var MAP_GREEN;
 var MAP_RED;
 var WHITE;
@@ -27,37 +47,64 @@ var PLAYER_RED;
 var PLAYER_GREEN;
 var PRISON_GREY;
 
+var ROOMS_TABLE_BG_COLOR;
+var EVENTS_TEXT_COLOR;
+var SCORE_TEXT_COLOR;
+
 //ASSETS
 var red_flag_img;
 var green_flag_img;
 
 
 //game
-var socket = io();
+var socket;
 var flags = [];
 var players = {};
-var this_player_name = "Anon"
+var this_player_name = "ANON"
 
 var CONNECTED_TO_ROOM = false
 var GAME_IN_PROGRESS = false
 var update_clock;
 
-//ui elements 
+//ui elements
+//      ui - intro 
 var start_button;
 var name_input;
 
+//      ui - menu
+var create_room_input;
 var create_room_button;
+var rooms_table;
+var refresh_button;
 
+//      ui - game
 var event_table;
+var open_close_menu_button;
+var red_score_text;
+var green_score_text;
+var quit_button;
+
+document.bgColor = "#5a5460"
+
+// socket.on('connect', function () { 
+//     console.log('connected')
+//     socket.on('disconnect', function() {
+//         console.log('disconnected')
+//     });
+// });
 
 function preload()
 {
+    
     red_flag_img = loadImage('/assets/flag_red.png');
     green_flag_img = loadImage('/assets/flag_green.png');
+
+    
 }
 
 function setup()
 {   
+    p5setup = true
     frameRate(60)
     MAP_GREEN = color(42, 130, 62)
     MAP_RED = color(155, 49, 49)
@@ -67,88 +114,199 @@ function setup()
     PLAYER_RED = color(252, 93, 93)//red
     PLAYER_GREEN = color(80, 186, 104)//green
     PRISON_GREY = color(50,90)
-
-    
+    // CANVAS_BG = color(40, 34, 53)
+    CANVAS_BG = color(54, 49, 63)
+    ROOMS_TABLE_BG_COLOR = color(46, 39, 53)
+    EVENTS_TEXT_COLOR = color(164, 157, 173)
+    SCORE_TEXT_COLOR = color(255, 253, 249)
 
     //#region DRAW INTRO
-    var menuItemWidth = 300
-    var menuItemHeight = 50
-    name_input = createInput('ENTER NAME')
-    name_input.style('height',menuItemHeight+'px')
-    name_input.style('width',menuItemWidth+'px')
-    name_input.style('font-size',menuItemHeight*3/5+'px')
-    name_input.style('text-align','center')
-    name_input.elt.onfocus = function(){
-        name_input.elt.value = ""
-    }
+ 
 
-    name_input.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2-menuItemHeight);
+    name_input = CreateInput('ENTER NAME',0,0,menuItemWidth,menuItemHeight,menuItemHeight*3/5,true,null)
+    
 
     start_button = createButton('START')
     start_button.style('font-size',menuItemHeight*2/5+'px')    
     start_button.style('height',menuItemHeight+'px')
     start_button.style('width',menuItemWidth+'px')
-    start_button.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2);
-    start_button.mousePressed(StartGame);
+    start_button.mousePressed(StartPressed);
     //#endregion
 
-
     //#region DRAW MENU
-    create_room_button = createButton('CREATE ROOM')
-    create_room_button.style('font-size',menuItemHeight*2/5+'px')    
-    create_room_button.style('height',menuItemHeight+'px')
-    create_room_button.style('width',menuItemWidth+'px')
-    create_room_button.position(CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_DIMENSIONS.height/2);
-    create_room_button.mousePressed(CreateRoom);
+    create_room_input = CreateInput('ROOM NAME',0,0,menuItemWidth,menuItemHeight,menuItemHeight*3/5,true,null)
+    create_room_button = CreateButton('CREATE ROOM',0,0,menuItemWidth,menuItemHeight,menuItemHeight*2/5,null,CreateRoomPressed)
+    
+
+    var roomsPadding = 20
+    var refreshButtonHeight = menuItemHeight
+    var roomsTableHeight = CANVAS_DIMENSIONS.height - roomsPadding*2 - refreshButtonHeight
+    
+    rooms_table = createElement('tbody')
+    rooms_table.style('width','400px')
+    rooms_table.style('height',roomsTableHeight+'px')
+    rooms_table.style('background-color',ROOMS_TABLE_BG_COLOR)
+    
+    refresh_button = CreateButton('REFRESH',roomsPadding,roomsPadding+roomsTableHeight,400,refreshButtonHeight,menuItemHeight*2/5,null,GetRooms)
     //#endregion
 
     //#region DRAW GAME
     createCanvas(CANVAS_DIMENSIONS.width, CANVAS_DIMENSIONS.height)
+    background(CANVAS_BG)
+
+    
+    red_score_text = createDiv('RED: 0')
+    red_score_text.style('text-align','right')
+    red_score_text.style('width',menuItemWidth+'px')
+    red_score_text.style('font-size',scoreFontSize+'px')
+    red_score_text.style('color',SCORE_TEXT_COLOR)
+    
+    green_score_text = createDiv('GREEN: 0')
+    green_score_text.style('text-align','left')
+    green_score_text.style('width',menuItemWidth+'px')
+    green_score_text.style('font-size',scoreFontSize+'px')
+    green_score_text.style('color',SCORE_TEXT_COLOR)
+
+    open_close_menu_button = CreateButton('MENU',0,0,game_menu_item_width,game_menu_item_height,16,null,ToggleMenu);
+    quit_button = CreateButton('QUIT TO LOBBY',0,0,game_menu_item_width,game_menu_item_height,16,null,QuitToLobby);
 
     event_table = createElement('tbody')
-    event_table.style('width','200px')
-    event_table.style('height',CANVAS_DIMENSIONS.height+'px')
-    event_table.style('background-color','grey')
-    event_table.position(CANVAS_DIMENSIONS.width,0)
+    event_table.style('width', CANVAS_DIMENSIONS.width+'px')
+    event_table.style('height', window.innerHeight-CANVAS_VERT_OFFSET*2-CANVAS_DIMENSIONS.height-eventsPadding +'px')
+    event_table.style('background-color',ROOMS_TABLE_BG_COLOR)
+    event_table.style('padding-left','8px')
+    event_table.style('padding-top','6px')
+    event_table.style('overflow-y','scroll')
+    
+
+    PositionMenuItems()
     //#endregion
     
     Scene('INTRO')
-
-    AddToChat("CONNECTED")
 }
 
-function AddToChat(content)
+function AddToChat(content,style)
 {
     var td = createElement('td')
-    td.parent(event_table)
-    td.html(content)
-    td.style('color','white')
+    var tr = createElement('tr')
+    var date = new Date()
+    tr.parent(event_table)
+    td.parent(tr)
+    td.html(`${date.getHours()}:${date.getMinutes()}: `+content)
+    td.style('color',EVENTS_TEXT_COLOR)
+    td.style('font-size','16px')
+    //td.style('padding-left','8px')
+    td.style('padding-top','4px')
+}
+
+//#region ========================================== UI - DOM FUNCTIONS ==========================================
+function CreateButton(title,x,y,w,h,fontSize,parent,onclick)
+{
+    var newButton;
+    newButton = createButton(title)
+    newButton.style('font-size',fontSize+'px')    
+    newButton.style('height',h+'px')
+    newButton.style('width',w + 'px')
+    newButton.position(x,y);
+    newButton.mousePressed(onclick);
+
+    if(parent != null)
+    {
+        newButton.parent(parent)
+    }
+
+    return newButton
+}
+
+function CreateInput(initial,x,y,w,h,fontSize,clearOnFocus,parent)
+{
+    var newInput;
+    newInput = createInput(initial)
+    newInput.style('height',h+'px')
+    newInput.style('width',w+'px')
+    newInput.style('font-size',fontSize+'px')
+    newInput.style('text-align','center')
+    
+    if(clearOnFocus)
+    {
+        newInput.elt.onfocus = function(){
+            newInput.elt.value = ""
+        }    
+    }
+
+    if(parent != null)
+    {
+        newInput.parent(parent)
+    }
+
+    newInput.position(x,y);
+    
+    return newInput
+}
+
+function CreateTableCell(table,html)
+{
+    var td = createElement('td')
+    td.parent(table)
+    td.html(html)
+    td.style('color',EVENTS_TEXT_COLOR)
     td.style('font-size','20px')
     td.style('font-family','Calibri')
     td.style('padding-left','10px')
     td.style('padding-top','8px')
+
+    return td
 }
+
+var current_scene = 'INTRO'
 
 function Scene(name)
 {
+    current_scene = name
+    
+    if(!p5setup)
+    {
+        return
+    }
+
+    background(CANVAS_BG)
+
+    in_game_menu = false
+
+    name_input.hide()
+    start_button.hide()
+    create_room_input.hide()
+    create_room_button.hide()
+    rooms_table.hide()
+    refresh_button.hide()
+    event_table.hide()
+    open_close_menu_button.hide()
+    quit_button.hide()
+    red_score_text.hide()
+    green_score_text.hide()
+
+    event_table.html("")
+
     switch(name)
     {
+        
         case 'INTRO':
         name_input.show()
         start_button.show()
-        create_room_button.hide()
         break;
 
         case 'MENU':
+        create_room_input.show()
         create_room_button.show()
-        name_input.hide()
-        start_button.hide()
+        rooms_table.show()
+        refresh_button.show()
         break;
 
         case 'GAME':
-        name_input.hide()
-        start_button.hide()
-        create_room_button.hide()
+        open_close_menu_button.show()
+        red_score_text.show()
+        green_score_text.show()
+        event_table.show()
 
         clearInterval(update_clock)
         update_clock = setInterval(Update,1000/callRate)
@@ -156,26 +314,76 @@ function Scene(name)
     }
 }
 
+//#endregion
+
 //#region ========================================== UI ACTIONS ==========================================
-function StartGame()
+function StartPressed()
 {
-    this_player_name = name_input.elt.value
-
-    Scene('MENU')
-}
-
-var creating = false
-function CreateRoom()
-{
-    if(!creating)
+    var player_name = "Some dude"
+    if(name_input.elt.value != "" && name_input.elt.value != "ENTER NAME")
     {
-        socket.emit('CREATE_ROOM')
+        player_name = name_input.elt.value
     }
 
-    creating = true
+    this_player_name = player_name
+
+
+    JoinRoom("/")
+    
+    Scene("MENU")
+    
+}
+
+function CreateRoomPressed()
+{
+    var roomName = this_player_name + "'s room"
+    if(create_room_input.elt.value != "" && create_room_input.elt.value != "ROOM NAME")
+    {
+        roomName = create_room_input.elt.value
+    }
+
+    CreateRoom(roomName)
+}
+
+function CreateRoom(display_name)
+{
+    socket.emit('CREATE_ROOM',display_name)
+}
+
+function JoinRoom(namespace)
+{
+    if(socket != null)
+    {
+        
+        socket.disconnect()
+        // socket.removeAllListeners()
+    }
+    
+    socket = io(namespace)
+    socket.on('JOINED_ROOM',OnJoinedRoom)
+    socket.on('JOINED_LOBBY',OnJoinedLobby)
+}
+
+function GetRooms()
+{
+    socket.emit('GET_ROOMS')
+}
+
+var in_game_menu = false
+function ToggleMenu()
+{
+    in_game_menu = !in_game_menu
+    in_game_menu ? quit_button.show() : quit_button.hide()
+}
+
+function QuitToLobby()
+{
+    JoinRoom('/')
 }
 
 //#endregion
+
+//#region ========================================== FRAME FUNCTIONS ==========================================
 
 function Update()
 {
@@ -188,13 +396,12 @@ function Update()
 
 function draw()
 {
-
     // ========================================== UI - GAME =================================================
-    if(CONNECTED_TO_ROOM && GAME_IN_PROGRESS)
+    if(CONNECTED_TO_ROOM && GAME_IN_PROGRESS && current_scene == "GAME")
     {
         timeElapsedSincePackage += 1000/frameRate()
         //#region ========================================== UI - MAP =================================================
-        background(50, 89, 100);
+        background(CANVAS_BG);
         
         strokeWeight(1)
         stroke(BLACK)
@@ -263,20 +470,43 @@ function draw()
             fill(fillColor)
             strokeWeight(weight)
             stroke(strokeColor)
+            textAlign(LEFT)
 
+            var playerSize = thisPlayer.stats.diameter
+            var nameLabelWidth = playerSize*2
+            var nameLabelOffset = playerSize*1.1
             if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
             {
-                ellipse(thisPlayer.pos.x,thisPlayer.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+                ellipse(thisPlayer.pos.x,thisPlayer.pos.y,playerSize,playerSize)
+                noStroke()
+                fill(BLACK)
+                text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,30)
                 continue
             }
 
-            var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
+            var timeDiff = (recentPackageTime-previousPackageTime)
+            var lerp_weight = Math.min((timeElapsedSincePackage/timeDiff),1)
             var lerp_x = lerp(thisPlayer.old_pos.x,thisPlayer.pos.x,lerp_weight)
             var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
             var lerpPos = {x:lerp_x,y:lerp_y}
 
-            ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+            ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,playerSize)
+
+            textAlign(CENTER)
+            noStroke()
+            fill(BLACK)
+            text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,30)
+
+
+            if(thisPlayer.id == socket.id)
+            {
+                var stamina = thisPlayer.stamina
+                rect(0,0,stamina,40)
+            }
         }
+
+        
+
         //#endregion
         //#region ========================================== UI - FLAGS =================================================
         for(var flag of flags)
@@ -301,41 +531,118 @@ function draw()
 }
 
 
-socket.on('ON_ROOM_CREATED',function(newNameSpace){
-    console.log('I CREATED A ROOM' + newNameSpace)  
-})
-
-socket.on('SET_NAMESPACE',function(newNameSpace){
-    
-    console.log('JOINING ROOM ' + newNameSpace)
-    socket = io(newNameSpace)
-    
-    socket.on('JOINED_ROOM',OnJoinedRoom)
-
-    // socket.on('FULL_PACKAGE',function(package){
-    //     console.log("RECEIVING PACKAGE")
-    //     // console.log(JSON.stringify(package))
-    // })
-})
-
-
-function OnJoinedRoom(roomName)
+function windowResized()
 {
-    console.log("CONNECTED TO ROOM:" + roomName)
+    CANVAS_HORIZONTAL_OFFSET = (window.innerWidth-CANVAS_DIMENSIONS.width)/2;
+    PositionMenuItems()
+}
 
-    socket.on('FULL_PACKAGE',ReceivePackage)
-    socket.on('PLAYER_DISCONNECTED',PlayerDisconnected)
+function PositionMenuItems()
+{
+
+    var roomsPadding = 20
+    var refreshButtonHeight = menuItemHeight
+    var roomsTableHeight = CANVAS_DIMENSIONS.height - roomsPadding*2 - refreshButtonHeight
+
+    name_input.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2,CANVAS_VERT_OFFSET+ CANVAS_DIMENSIONS.height/2-menuItemHeight);
+    start_button.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_VERT_OFFSET+CANVAS_DIMENSIONS.height/2);
+
+    create_room_input.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_VERT_OFFSET+CANVAS_DIMENSIONS.height/2-menuItemHeight);
+    create_room_button.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2,CANVAS_VERT_OFFSET+CANVAS_DIMENSIONS.height/2)
+
+    refresh_button.position(CANVAS_HORIZONTAL_OFFSET+roomsPadding,CANVAS_VERT_OFFSET+roomsPadding+roomsTableHeight)
+    rooms_table.position(CANVAS_HORIZONTAL_OFFSET+roomsPadding,CANVAS_VERT_OFFSET+roomsPadding)
+
+    open_close_menu_button.position((window.innerWidth)/2-game_menu_item_width/2,CANVAS_VERT_OFFSET+22);
+    quit_button.position((window.innerWidth)/2-game_menu_item_width/2,CANVAS_VERT_OFFSET+22 + game_menu_item_height + 22);
+    // event_table.position(CANVAS_DIMENSIONS.width+12,8)
+
+    
+    var scorePadding = 24
+    red_score_text.position(window.innerWidth/2-menuItemWidth-game_menu_item_width/2-scorePadding-8,CANVAS_VERT_OFFSET+scoreTopPadding)
+    green_score_text.position(window.innerWidth/2+game_menu_item_width/2+scorePadding,CANVAS_VERT_OFFSET+scoreTopPadding)
+    
+    event_table.position(CANVAS_HORIZONTAL_OFFSET,CANVAS_VERT_OFFSET + CANVAS_DIMENSIONS.height + eventsPadding)
+}
+
+//#endregion
+
+//#region ========================================== STATE INITIALIZERS =================================================
+
+// socket.on('JOINED_LOBBY',OnJoinedLobby)
+
+function OnJoinedLobby() //AFTER JOIN LOBBY ===== INIT LOBBY CALLBACKS
+{
+    console.log('JOINED LOBBY')
+    socket.on('ROOMS',function(rooms){
+        for(var key in rooms)
+        {
+            var room = rooms[key]
+            var newTableItem = CreateTableCell(rooms_table)
+            var newButton = CreateButton(room.display_name,0,0,400,30,20,newTableItem,function(){
+                JoinRoom(key)
+            })
+        }
+    })
+
+    socket.on('ON_ROOM_CREATED',function(newNameSpace){
+        AddToChat(`You(${this_player_name}) created a room`)
+        console.log('I CREATED A ROOM' + newNameSpace)  
+    })
+    
+    socket.on('SET_NAMESPACE',function(newNameSpace){
+        
+        console.log('JOINING ROOM ' + newNameSpace)
+        JoinRoom(newNameSpace)
+    })
+
+    //GAME
+    CONNECTED_TO_ROOM = false
+    GAME_IN_PROGRESS = false
+
+    GetRooms()
 
     //UI
+    Scene('MENU')
+}
+
+function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
+{
+    //UI
+    Scene('GAME')
+
+    console.log("CONNECTED TO ROOM:" + roomName)
+    AddToChat('JOINED ROOM: ' + roomName,0)
+    console.log('joined room+' + socket.nsp)
+    socket.on('FULL_PACKAGE',function(package){
+        ReceivePackage(package,socket.nsp)
+    })
+    socket.on('PLAYER_DISCONNECTED',PlayerDisconnected)
+    socket.on('IN_GAME_MESSAGE',ReceiveGameMessage)
+    socket.on('disconnect', function() {
+        console.log('disconnected')
+        AddToChat("You have been disconnected. Please refresh the page",0)
+    });
+    socket.on('disconnect',function(){
+        console.log("DISCONNECTED FROM ROOM")
+        // socket.removeAllListeners('send message');
+        //         socket.removeAllListeners('disconnect');
+        //         io.removeAllListeners('connection');
+    })
+
+    //GAME
     CONNECTED_TO_ROOM = true
     GAME_IN_PROGRESS = true
-    Scene('GAME')
+    previousPackageTime = 0
+    recentPackageTime = 0
+
+    
+
+    socket.emit('PLAYER_INITIALIZED',this_player_name)
+
 }
 
-function PlayerDisconnected(disconnected_player_data){
-    delete players[disconnected_player_data.id]
-}
-
+//#endregion
 
 //#region GAME EVENTS
 var countDown = 3;
@@ -343,10 +650,12 @@ var counterInterval;
 var previousPackageTime = 0
 var recentPackageTime = 0
 var timeElapsedSincePackage = 0
-function ReceivePackage(package){
+function ReceivePackage(package,nsp){
     previousPackageTime = recentPackageTime
     recentPackageTime = Date.now()
     timeElapsedSincePackage = 0
+
+    console.log('received' + new Date().getSeconds())
 
     if(package['players'] != null)
     {
@@ -429,8 +738,19 @@ function ReceivePackage(package){
 
     if(package["SCORE"] != null)
     {
-        console.log(JSON.stringify(package['SCORE']))
+        var score = package["SCORE"]
+        red_score_text.html(`RED: ${score[0]}`)
+        green_score_text.html(`GREEN: ${score[1]}`)
     }
+}
+
+function ReceiveGameMessage(message)
+{
+    AddToChat(message.content,message.style)
+}
+
+function PlayerDisconnected(disconnected_player_data){
+    delete players[disconnected_player_data.id]
 }
 
 //#endregion

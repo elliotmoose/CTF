@@ -1,0 +1,11 @@
+body {
+    margin: 0;
+    display: flex;
+  
+    /* This centers our sketch horizontally. */
+    justify-content: center;
+    padding-top: 22;
+    font-family: Arial;
+    /* This centers our sketch vertically. */
+    /* align-items: center; */
+  }
