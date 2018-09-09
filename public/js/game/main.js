@@ -1,4 +1,5 @@
-const callRate = 20
+const callRate = 40
+const fps = 60
 const LERP_TOLERANCE = 150
 // ============================================ UI ============================================ 
 
@@ -105,10 +106,10 @@ function preload()
 function setup()
 {   
     p5setup = true
-    frameRate(60)
+    // frameRate(fps)
     MAP_GREEN = color(42, 130, 62)
     MAP_RED = color(155, 49, 49)
-    WHITE = color(255, 255, 255)
+    WHITE = color(255, 255, 255,255)
     BLACK = color(0)
     GOLD = color(255, 207, 34)
     PLAYER_RED = color(252, 93, 93)//red
@@ -396,6 +397,7 @@ function Update()
 
 function draw()
 {
+    // console.log(frameRate())
     // ========================================== UI - GAME =================================================
     if(CONNECTED_TO_ROOM && GAME_IN_PROGRESS && current_scene == "GAME")
     {
@@ -470,16 +472,35 @@ function draw()
             fill(fillColor)
             strokeWeight(weight)
             stroke(strokeColor)
-            textAlign(LEFT)
+            
 
             var playerSize = thisPlayer.stats.diameter
             var nameLabelWidth = playerSize*2
             var nameLabelOffset = playerSize*1.1
+
+            var stamina = thisPlayer.stamina
+            var staminaBarMaxWidth = 75
+            var staminaBarCurWidth = stamina/100*staminaBarMaxWidth
+            var staminaBarHeight = 15
+            var staminaBarOffset = playerSize*1.1
+
+            textAlign(CENTER)
+            textSize(12);
+
             if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
             {
                 ellipse(thisPlayer.pos.x,thisPlayer.pos.y,playerSize,playerSize)
+
                 noStroke()
-                fill(BLACK)
+
+                fill(PLAYER_RED)
+                rect(thisPlayer.pos.x-staminaBarMaxWidth/2,thisPlayer.pos.y - staminaBarOffset,staminaBarMaxWidth,staminaBarHeight)
+
+                fill(PLAYER_GREEN)
+                rect(thisPlayer.pos.x-staminaBarMaxWidth/2,thisPlayer.pos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
+
+                
+                fill(WHITE)
                 text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,30)
                 continue
             }
@@ -492,17 +513,18 @@ function draw()
 
             ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,playerSize)
 
-            textAlign(CENTER)
             noStroke()
-            fill(BLACK)
+
+            fill(PLAYER_RED)
+            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarMaxWidth,staminaBarHeight)
+
+            fill(PLAYER_GREEN)
+            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
+
+
+            
+            fill(WHITE)
             text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,30)
-
-
-            if(thisPlayer.id == socket.id)
-            {
-                var stamina = thisPlayer.stamina
-                rect(0,0,stamina,40)
-            }
         }
 
         
@@ -527,6 +549,19 @@ function draw()
             image(team_flag_image, lerp_x-FLAG_HEIGHT/2,lerp_y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
         }
         //#endregion
+    }
+
+
+    if(CONNECTED_TO_ROOM && current_scene == "GAME")
+    {
+        noStroke()
+        // fill(100,countdownAlpha*100)
+        fill(255,255,255,countdownAlpha*255)
+        textSize(150);
+        textAlign(CENTER)
+        text(countDownText,CANVAS_HORIZONTAL_OFFSET + CANVAS_DIMENSIONS.width/2 - 100,CANVAS_DIMENSIONS.height/2-100, 200,200)
+
+        countdownAlpha -= 1/frameRate()
     }
 }
 
@@ -646,6 +681,9 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
 
 //#region GAME EVENTS
 var countDown = 3;
+var countDownText = ''
+var countingDown = false
+var countdownAlpha = 0;
 var counterInterval;
 var previousPackageTime = 0
 var recentPackageTime = 0
@@ -655,7 +693,7 @@ function ReceivePackage(package,nsp){
     recentPackageTime = Date.now()
     timeElapsedSincePackage = 0
 
-    console.log('received' + new Date().getSeconds())
+    // console.log('received' + new Date().getSeconds())
 
     if(package['players'] != null)
     {
@@ -712,28 +750,31 @@ function ReceivePackage(package,nsp){
 
     if(package["COUNTDOWN_BEGIN"] != null)
     {
+        // GAME_IN_PROGRESS = false
         countingDown = true
         countDown = 3
-        console.log(countDown)
-        countDown-=1
-
-        if(countDown == 0)
-        {
-            console.log('LOCAL GAME READY')
-        }
-        else
-        {
-            counterInterval = setInterval(function(){
-                console.log(countDown)
-                countDown-=1
-            },1000)
-        }
+        countDownText = '3'
+        countdownAlpha = 1
+        
+        counterInterval = setInterval(function(){
+            countDown-=1
+            countdownAlpha = 1 //SHOW COUNT DOWN UI
+            
+            if(countDown <= 0)
+            {
+                countDownText = 'GO'
+            }
+            else
+            {
+                countDownText = `${countDown}`
+            }
+        },1000)
     }
 
     if(package['GAME_BEGIN'] != null)
     {
         clearInterval(counterInterval)
-        console.log('LOCAL GAME READY')
+        countingDown = false
     }
 
     if(package["SCORE"] != null)
@@ -743,6 +784,8 @@ function ReceivePackage(package,nsp){
         green_score_text.html(`GREEN: ${score[1]}`)
     }
 }
+
+
 
 function ReceiveGameMessage(message)
 {

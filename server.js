@@ -326,7 +326,7 @@ function UpdatePlayerPosition(roomId)
     {
       //Player did not request this round
       //stamina
-      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
+      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
       continue
     }
 
@@ -548,6 +548,8 @@ function ResetMap(roomId)
   {
     rooms[roomId].players[playerID].pos = rooms[roomId].players[playerID].team==0 ? RED_SPAWN : GREEN_SPAWN 
     rooms[roomId].players[playerID].stamina = 100
+    rooms[roomId].players[playerID].captured = false
+    rooms[roomId].players[playerID].hasFlag = false
   }
 
   for(var index in rooms[roomId].flags)
