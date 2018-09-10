@@ -100,6 +100,10 @@ var quit_button;
 
 document.bgColor = "#5a5460"
 
+
+var pingSentTime = 0;
+var ping = 0
+
 // socket.on('connect', function () { 
 //     console.log('connected')
 //     socket.on('disconnect', function() {
@@ -415,6 +419,9 @@ function Update()
     {
         socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
     }
+
+    pingSentTime = Date.now()
+    socket.emit('PING') 
     
 }
 
@@ -548,8 +555,6 @@ function draw()
             fill(PLAYER_GREEN)
             rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
 
-
-            
             fill(WHITE)
             text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,30)
         }
@@ -578,7 +583,7 @@ function draw()
         //#endregion
     }
 
-
+    //COUNT DOWN TEXT
     if(CONNECTED_TO_ROOM && current_scene == "GAME")
     {
         noStroke()
@@ -589,6 +594,11 @@ function draw()
         text(countDownText,CANVAS_DIMENSIONS.width/2 - 100,CANVAS_DIMENSIONS.height/2-100, 200,200)
 
         countdownAlpha -= 1/frameRate()
+
+        fill(WHITE)
+        textSize(20)
+        text(`Ping: ${ping}`,CANVAS_DIMENSIONS.width - 100,45, 100,30)
+        //PING TEXT
     }
 }
 
@@ -686,6 +696,10 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
         // socket.removeAllListeners('send message');
         //         socket.removeAllListeners('disconnect');
         //         io.removeAllListeners('connection');
+    })
+
+    socket.on('PING_RETURN',function(){
+        ping = pingSentTime-Date.now()
     })
 
     //GAME

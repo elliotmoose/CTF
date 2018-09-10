@@ -67,6 +67,11 @@ function CreateRoom(creator_socket,display_name)
       console.log('PLAYER JOINED GAME:' + display_name)
     })
 
+
+    socket.on('PING',function(){
+      socket.emit('PING_RETURN')
+    })
+
     socket.on('PLAYER_MOVED',function(request){
 
       if(!rooms[newRoomId].GAME_IN_PROGRESS)
