@@ -91,6 +91,10 @@ function CreateRoom(creator_socket,display_name)
 
       var oldPos = thisPlayer.pos
       
+      //TEST 
+      request.x = 1600
+      request.y = 0
+
       var vector = {x:request.x-oldPos.x,y: request.y-oldPos.y} //FROM PLAYER TO MOUSE
       var magnitude = Vector2Magnitude(vector)
       
