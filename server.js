@@ -36,7 +36,7 @@ http.listen(8080, function(){
 });
 
 
-var callRate = 60
+var callRate = 20
 var update_clock = setInterval(Update,1000/callRate)
 
 //#region SERVER LOBBY
@@ -68,8 +68,8 @@ function CreateRoom(creator_socket,display_name)
     })
 
 
-    socket.on('PING',function(){
-      socket.emit('PING_RETURN')
+    socket.on('PING',function(id){
+      socket.emit('PING_RETURN',id)
     })
 
     socket.on('PLAYER_MOVED',function(request){
@@ -90,10 +90,6 @@ function CreateRoom(creator_socket,display_name)
       }
 
       var oldPos = thisPlayer.pos
-      
-      //TEST 
-      request.x = 1600
-      request.y = 0
 
       var vector = {x:request.x-oldPos.x,y: request.y-oldPos.y} //FROM PLAYER TO MOUSE
       var magnitude = Vector2Magnitude(vector)
@@ -104,6 +100,7 @@ function CreateRoom(creator_socket,display_name)
           
           //PUSH TO DATA, UPDATE WILL OCCUR IN UPDATE QUEUE
           rooms[newRoomId].players[socket.id].newPosDir = newPosDir
+          rooms[newRoomId].players[socket.id].waypoint = request
           rooms[newRoomId].players[socket.id].newPosRequestMagnitude = magnitude //The request has a limit
           rooms[newRoomId].players[socket.id].sprint = request.sprint
       }
@@ -235,11 +232,11 @@ function CheckPlayerCollision(roomId)
                     {
                         if(other_player.captured) //if he was the one captured
                         {
-                          PlayerFreed(other_player)
+                          PlayerFreed(roomId,other_player)
                         }
                         else if(eachPlayer.captured) //if i was captured
                         {
-                          PlayerFreed(eachPlayer)
+                          PlayerFreed(roomId,eachPlayer)
                         }
                     }
                 }
@@ -335,7 +332,7 @@ function UpdatePlayerPosition(roomId)
     var recoveryFactor = 0.02 //100 stamina will recover 1000 (milliseconds) * factor
     var depletionFactor = 0.1 //100 stamina will deduuct 1000 (milliseconds) * factor
 
-    if(newPosDir == null)
+    if(thisPlayer.waypoint == null)
     {
       //Player did not request this round
       //stamina
@@ -343,9 +340,19 @@ function UpdatePlayerPosition(roomId)
       continue
     }
 
-    
+    // var requestMagnitude = thisPlayer.newPosRequestMagnitude
+      
+    var vectorPlayerToWaypoint = Vector2Subtraction(thisPlayer.waypoint,thisPlayer.pos)
+    var distanceFromWaypoint = Vector2Magnitude(vectorPlayerToWaypoint)
+    var requestMagnitude = distanceFromWaypoint
 
-    var requestMagnitude = thisPlayer.newPosRequestMagnitude
+    newPosDir = Vector2Divide(vectorPlayerToWaypoint,distanceFromWaypoint)
+
+    if(distanceFromWaypoint <= 10)
+    {
+      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
+      continue
+    }
     
     
 
@@ -353,17 +360,19 @@ function UpdatePlayerPosition(roomId)
     { 
       if(thisPlayer.stamina > 0)
       {
-        multiplier = 2
+        multiplier = 1.6
       }
     }
     else
     {
       rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
     }
- 
+    
+
 
     var newPosDirMagnitude = deltaTime*thisPlayer.stats.speed/1000*multiplier
     var finalMagnitude = Math.min(requestMagnitude,newPosDirMagnitude)
+    // var finalMagnitude = newPosDirMagnitude
 
     if(thisPlayer.stamina > 0 && thisPlayer.sprint)
     {
@@ -516,7 +525,14 @@ function PlayerCaught(roomId,player_caught)
 }
 
 function PlayerFreed(roomId,player_freed){
-  rooms[roomId].players[player_freed.id].captured = false
+  if(rooms[roomId] != null)
+  {
+    rooms[roomId].players[player_freed.id].captured = false
+  }
+  else
+  {
+    console.log("ERROR COULD NOT FIND ROOM WITH ID: "+ roomId)
+  }
 }
 
 function ShouldFlagBeCaptured(player,flag)
@@ -568,6 +584,7 @@ function ResetMap(roomId)
   for(var playerID in rooms[roomId].players)
   {
     rooms[roomId].players[playerID].pos = rooms[roomId].players[playerID].team==0 ? RED_SPAWN : GREEN_SPAWN 
+    rooms[roomId].players[playerID].waypoint = rooms[roomId].players[playerID].pos
     rooms[roomId].players[playerID].stamina = 100
     rooms[roomId].players[playerID].captured = false
     rooms[roomId].players[playerID].hasFlag = false

@@ -1,4 +1,4 @@
-const callRate = 120
+const callRate = 40
 const fps = 60
 const LERP_TOLERANCE = 150
 // ============================================ UI ============================================ 
@@ -418,12 +418,16 @@ function Update()
     if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
     {
         socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
-        console.log("SENT")
     }
 
-    pingSentTime = Date.now()
-    socket.emit('PING') 
+    pingCalls["PING-"+pingCounter] = Date.now()
+    socket.emit('PING',pingCounter) 
+    pingCounter += 1
 }
+
+var pingCounter = 0
+var pingCalls = {}
+var latestPing = 0
 
 function draw()
 {
@@ -597,7 +601,7 @@ function draw()
 
         fill(WHITE)
         textSize(20)
-        text(`Ping: ${ping}`,CANVAS_DIMENSIONS.width - 100,45, 100,30)
+        text(`Ping: ${latestPing}`,CANVAS_DIMENSIONS.width - 100,45, 100,30)
         //PING TEXT
     }
 }
@@ -627,8 +631,6 @@ function PositionMenuItems()
     open_close_menu_button.position((window.innerWidth)/2-game_menu_item_width/2,CANVAS_VERTICAL_OFFSET+22);
     quit_button.position((window.innerWidth)/2-game_menu_item_width/2,CANVAS_VERTICAL_OFFSET+22 + game_menu_item_height + 22);
     // event_table.position(CANVAS_DIMENSIONS.width+12,8)
-
-    
     
     event_table.position(CANVAS_HORIZONTAL_OFFSET,CANVAS_VERTICAL_OFFSET + CANVAS_DIMENSIONS.height + eventsPadding)
 }
@@ -698,9 +700,11 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
         //         io.removeAllListeners('connection');
     })
 
-    socket.on('PING_RETURN',function(){
-        ping = pingSentTime-Date.now()
-        pingSentTime = 0
+    socket.on('PING_RETURN',function(id){
+        var callTime = pingCalls["PING-"+id]
+        latestPing = Date.now() - callTime
+        console.log(latestPing)
+        pingCalls[id] = undefined
     })
 
     //GAME
@@ -731,7 +735,6 @@ function ReceivePackage(package,nsp){
     recentPackageTime = Date.now()
     timeElapsedSincePackage = 0
 
-    console.log("RECEIVED")
 
     // console.log('received' + new Date().getSeconds())
 
