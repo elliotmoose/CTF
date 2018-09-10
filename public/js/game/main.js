@@ -43,8 +43,10 @@ var refreshButtonHeight = menuItemHeight
 var roomsTitleHeight = menuItemHeight
 var roomsTableHeight = CANVAS_DIMENSIONS.height - roomsPadding*2 - refreshButtonHeight - roomsTitleHeight - spaceBetweenTitleAndList
 
-
-
+//game 
+var chatHeight = 25
+var chatPadding = 6
+var eventsTableHeight = window.innerHeight-CANVAS_VERTICAL_OFFSET*2-CANVAS_DIMENSIONS.height-eventsPadding - chatHeight - chatPadding
 
 var p5setup = false
 
@@ -67,7 +69,6 @@ var SCORE_TEXT_COLOR;
 //ASSETS
 var red_flag_img;
 var green_flag_img;
-
 
 //game
 var socket;
@@ -97,6 +98,7 @@ var refresh_button;
 var event_table;
 var open_close_menu_button;
 var quit_button;
+var chat_input;
 
 document.bgColor = "#5a5460"
 
@@ -139,7 +141,8 @@ function setup()
     //#region DRAW INTRO
  
 
-    name_input = CreateInput('ENTER NAME',0,0,menuItemWidth,menuItemHeight,menuItemHeight*3/5,true,null)
+    name_input = CreateInput('',0,0,menuItemWidth,menuItemHeight,menuItemHeight*3/5,true,null)
+    name_input.elt.placeholder = 'ENTER NAME'
     
 
     start_button = createButton('START')
@@ -183,13 +186,29 @@ function setup()
     open_close_menu_button = CreateButton('MENU',0,0,game_menu_item_width,game_menu_item_height,16,null,ToggleMenu);
     quit_button = CreateButton('QUIT TO LOBBY',0,0,game_menu_item_width,game_menu_item_height,16,null,QuitToLobby);
 
+    
     event_table = createElement('tbody')
     event_table.style('width', CANVAS_DIMENSIONS.width+'px')
-    event_table.style('height', window.innerHeight-CANVAS_VERTICAL_OFFSET*2-CANVAS_DIMENSIONS.height-eventsPadding +'px')
+    event_table.style('height',eventsTableHeight +'px')
     event_table.style('background-color',ROOMS_TABLE_BG_COLOR)
     event_table.style('padding-left','8px')
     event_table.style('padding-top','6px')
     event_table.style('overflow-y','scroll')
+
+    
+    chat_input = CreateInput('Type to send a message...',0,0,CANVAS_DIMENSIONS.width,chatHeight,chatHeight*3/5,true,null)
+    chat_input.elt.addEventListener("keyup", function(event) {
+        // Cancel the default action, if needed
+        event.preventDefault();
+        // Number 13 is the "Enter" key on the keyboard
+        if (event.keyCode === 13) {
+          // Trigger the button element with a click
+
+          var message = {message: chat_input.elt.value, name: this_player_name}
+          socket.emit('PLAYER_BROADCAST_MESSAGE',message)
+          chat_input.elt.value = ""
+        }
+      });
     
     PositionMenuItems()
     //#endregion
@@ -232,10 +251,11 @@ function CreateButton(title,x,y,w,h,fontSize,parent,onclick)
     return newButton
 }
 
-function CreateInput(initial,x,y,w,h,fontSize,clearOnFocus,parent)
+function CreateInput(placeholder,x,y,w,h,fontSize,clearOnFocus,parent)
 {
     var newInput;
-    newInput = createInput(initial)
+    newInput = createInput()
+    newInput.elt.placeholder = placeholder
     newInput.style('height',h+'px')
     newInput.style('width',w+'px')
     newInput.style('font-size',fontSize+'px')
@@ -297,6 +317,7 @@ function Scene(name)
     event_table.hide()
     open_close_menu_button.hide()
     quit_button.hide()
+    chat_input.hide()
     
     
 
@@ -321,6 +342,7 @@ function Scene(name)
         case 'GAME':
         open_close_menu_button.show()
         event_table.show()
+        chat_input.show()
 
         clearInterval(update_clock)
         update_clock = setInterval(Update,1000/callRate)
@@ -414,14 +436,21 @@ function Update()
         return
     }
 
-    if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
+    if(document.activeElement != chat_input)
     {
-        socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+        if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
+        {
+            socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+        }
+    
+        if(keyIsDown(67))
+        {
+            socket.emit('PLAYER_PASSED_FLAG')
+        }
     }
-
-    if(keyIsDown(67))
+    else
     {
-        socket.emit('PLAYER_PASSED_FLAG')
+        console.log("FOCUS DUDE")
     }
 
     framesSinceLastPing += 1
@@ -652,7 +681,10 @@ function PositionMenuItems()
     quit_button.position((window.innerWidth)/2-game_menu_item_width/2,CANVAS_VERTICAL_OFFSET+22 + game_menu_item_height + 22);
     // event_table.position(CANVAS_DIMENSIONS.width+12,8)
     
+    eventsTableHeight = window.innerHeight-CANVAS_VERTICAL_OFFSET*2-CANVAS_DIMENSIONS.height-eventsPadding - chatHeight - chatPadding
+    event_table.style('height',eventsTableHeight + 'px')
     event_table.position(CANVAS_HORIZONTAL_OFFSET,CANVAS_VERTICAL_OFFSET + CANVAS_DIMENSIONS.height + eventsPadding)
+    chat_input.position(CANVAS_HORIZONTAL_OFFSET,CANVAS_VERTICAL_OFFSET + CANVAS_DIMENSIONS.height + eventsPadding + eventsTableHeight + chatPadding*2)
 }
 
 //#endregion
@@ -711,6 +743,7 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
     socket.on('PLAYER_DISCONNECTED',PlayerDisconnected)
     socket.on('IN_GAME_MESSAGE',ReceiveGameMessage)
     
+    socket.on('PLAYER_BROADCAST_MESSAGE',ReceiveGamePlayerMessage)
     socket.on('SERVER_FRAME_CHECK',function(frameCount){
         // AddToChat('SERVER RUNNING AT FRAMES: ' + frameCount,0)
         latestFrameCount = frameCount
@@ -851,6 +884,11 @@ function ReceivePackage(package,nsp){
 function ReceiveGameMessage(message)
 {
     AddToChat(message.content,message.style)
+}
+
+function ReceiveGamePlayerMessage(message)
+{
+    AddToChat(`${message.name}: ${message.message}`)
 }
 
 function PlayerDisconnected(disconnected_player_data){

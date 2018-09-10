@@ -153,6 +153,9 @@ function CreateRoom(creator_socket,display_name)
       rooms[newRoomId].players[socket.id].attemptingPass = true
     })
 
+    socket.on('PLAYER_BROADCAST_MESSAGE',function(message){
+      io.of(newRoomId).emit('PLAYER_BROADCAST_MESSAGE',message)
+    })
 
     socket.on('PING',function(id){
       socket.emit('PING_RETURN',id)
