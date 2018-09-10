@@ -1,4 +1,4 @@
-const callRate = 40
+const callRate = 120
 const fps = 60
 const LERP_TOLERANCE = 150
 // ============================================ UI ============================================ 
