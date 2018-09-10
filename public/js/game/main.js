@@ -663,6 +663,7 @@ function OnJoinedLobby() //AFTER JOIN LOBBY ===== INIT LOBBY CALLBACKS
 {
     console.log('JOINED LOBBY')
     socket.on('ROOMS',function(rooms){
+        rooms_table.html('')
         for(var key in rooms)
         {
             var room = rooms[key]

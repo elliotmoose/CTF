@@ -220,7 +220,8 @@ function PlayerDisconnectedFromRoom(roomId,socket_id)
   if(Object.keys(rooms[roomId].players).length == 1) //IF IT IS THE LAST PLAYER -> HE IS ABOUT TO LEAVE
   {
     console.log("ROOM DELETED: " + roomId)
-    rooms[roomId] = null //delete the room
+    io.of(roomId).removeAllListeners()
+    delete rooms[roomId]//delete the room
   }
   else
   {
@@ -431,6 +432,11 @@ function UpdateFlagPosition(roomId)
   {
     var flag = rooms[roomId].flags[index]
 
+    if(flag == null)
+    {
+      // continue
+    }
+
     if(flag.captured)
     {  
       //============================== UPDATE FLAG POSITION ==============================
@@ -469,7 +475,6 @@ function UpdatePlayerPosition(roomId)
       continue
     }
 
-    // var requestMagnitude = thisPlayer.newPosRequestMagnitude
     var vectorPlayerToWaypoint = Vector2Subtraction(thisPlayer.waypoint,thisPlayer.pos)
     var distanceFromWaypoint = Vector2Magnitude(vectorPlayerToWaypoint)
     var requestMagnitude = distanceFromWaypoint
@@ -483,7 +488,6 @@ function UpdatePlayerPosition(roomId)
     }
     
     
-
     if(thisPlayer.sprint)
     { 
       if(thisPlayer.stamina > 0)
@@ -495,8 +499,6 @@ function UpdatePlayerPosition(roomId)
     {
       rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
     }
-    
-
 
     var newPosDirMagnitude = deltaTime*thisPlayer.stats.speed/1000*sprint_multiplier
     var finalMagnitude = Math.min(requestMagnitude,newPosDirMagnitude)
@@ -516,7 +518,6 @@ function UpdatePlayerPosition(roomId)
 
     var finalPos;
 
-    
     if(thisPlayer.captured)
     {
       // finalPos = {x:0,y:0}
@@ -530,8 +531,6 @@ function UpdatePlayerPosition(roomId)
     var box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
     finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,finalPos)
     rooms[roomId].players[playerID].pos = finalPos
-    rooms[roomId].players[playerID].newPosDir = null //position has been committed this frame, dont need it anymore
-    rooms[roomId].players[playerID].newPosRequestMagnitude = null
   }
 }
 
