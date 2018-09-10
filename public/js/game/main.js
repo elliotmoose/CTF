@@ -422,11 +422,20 @@ function Update()
         socket.emit('PLAYER_PASSED_FLAG')
     }
 
-    pingCalls["PING-"+pingCounter] = Date.now()
-    socket.emit('PING',pingCounter) 
-    pingCounter += 1
+    framesSinceLastPing += 1
+    //ping every second
+    if(framesSinceLastPing > callRate)
+    {
+        framesSinceLastPing = 0
+        
+        pingCalls["PING-"+pingCounter] = Date.now()
+        socket.emit('PING',pingCounter) 
+        pingCounter += 1
+    }
+
 }
 
+var framesSinceLastPing = 0
 var pingCounter = 0
 var pingCalls = {}
 var latestPing = 0
