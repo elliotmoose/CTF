@@ -418,11 +418,11 @@ function Update()
     if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
     {
         socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+        console.log("SENT")
     }
 
     pingSentTime = Date.now()
     socket.emit('PING') 
-    
 }
 
 function draw()
@@ -700,6 +700,7 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
 
     socket.on('PING_RETURN',function(){
         ping = pingSentTime-Date.now()
+        pingSentTime = 0
     })
 
     //GAME
@@ -729,6 +730,8 @@ function ReceivePackage(package,nsp){
     previousPackageTime = recentPackageTime
     recentPackageTime = Date.now()
     timeElapsedSincePackage = 0
+
+    console.log("RECEIVED")
 
     // console.log('received' + new Date().getSeconds())
 
