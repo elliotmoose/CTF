@@ -320,6 +320,7 @@ function Scene(name)
     background(CANVAS_BG)
 
     in_game_menu = false
+    countingDown = false
 
     name_input.hide()
     start_button.hide()
@@ -891,6 +892,7 @@ function ReceivePackage(package,nsp){
 
     if(package['GAME_BEGIN'] != null)
     {
+
         clearInterval(counterInterval)
         countingDown = false
     }
