@@ -36,7 +36,7 @@ http.listen(8080, function(){
 });
 
 
-var callRate = 20
+var callRate = 60
 var update_clock = setInterval(Update,1000/callRate)
 
 //#region SERVER LOBBY
