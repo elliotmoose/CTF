@@ -20,11 +20,9 @@ const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
 const GREEN_PRISON_LOC = {x: CANVAS_DIMENSIONS.width-150,y: CANVAS_DIMENSIONS.height/2}
 
 const SPAWN_PADDING = 70
-// const RED_SPAWN = {x: SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
-// const GREEN_SPAWN = {x:CANVAS_DIMENSIONS.width-SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
 
-const RED_SPAWN = RED_PRISON_LOC
-const GREEN_SPAWN = GREEN_PRISON_LOC
+const RED_SPAWN = {x: 12,y: CANVAS_DIMENSIONS.height/2}
+const GREEN_SPAWN = {x: CANVAS_DIMENSIONS.width-12,y: CANVAS_DIMENSIONS.height/2}
 
 app.use('/js',express.static(__dirname + "/public/js"))
 app.use('/assets',express.static(__dirname + "/public/assets"))
@@ -364,12 +362,15 @@ function UpdatePlayerPosition(roomId)
     }
 
     var prison_center = thisPlayer.team==0?GREEN_PRISON_LOC:RED_PRISON_LOC
+    var base_center = thisPlayer.team==1?GREEN_PRISON_LOC:RED_PRISON_LOC
 
     var oldPos = thisPlayer.pos
     var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
     var radius = PRISON_RADIUS
 
     var finalPos;
+
+    
     if(thisPlayer.captured)
     {
       // finalPos = {x:0,y:0}
@@ -377,9 +378,11 @@ function UpdatePlayerPosition(roomId)
     }
     else
     {
-      finalPos = newPos
+      finalPos = PositionLimitedOutsideCircle(base_center,radius,thisPlayer.stats.diameter,oldPos,newPos)
     }
 
+    var box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
+    finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,finalPos)
     rooms[roomId].players[playerID].pos = finalPos
     rooms[roomId].players[playerID].newPosDir = null //position has been committed this frame, dont need it anymore
     rooms[roomId].players[playerID].newPosRequestMagnitude = null
@@ -391,8 +394,8 @@ function UpdatePlayerPosition(roomId)
 //#region =================================== GAME SERVER EVENTS ===================================
 function InitializeGameRoom(roomId)
 {
-  var greenFlag = NewFlagObject(GREEN_SPAWN,1)
-  var redFlag = NewFlagObject(RED_SPAWN,0)
+  var greenFlag = NewFlagObject(GREEN_PRISON_LOC,1)
+  var redFlag = NewFlagObject(RED_PRISON_LOC,0)
   rooms[roomId].flags.push(greenFlag)
   rooms[roomId].flags.push(redFlag)
   rooms[roomId].GAME_IN_PROGRESS = true
@@ -500,7 +503,7 @@ function PlayerCaught(roomId,player_caught)
 
    //Update player state (flag drop first)
    rooms[roomId].players[player_caught.id].captured = true
-   rooms[roomId].players[player_caught.id].pos = player_caught.team==0?GREEN_SPAWN:RED_SPAWN
+   rooms[roomId].players[player_caught.id].pos = player_caught.team==0?GREEN_PRISON_LOC:RED_PRISON_LOC
 }
 
 function PlayerFreed(roomId,player_freed){
@@ -540,6 +543,7 @@ function FlagDropped(flag)
 {
   flag.captured = false
   flag.capturer_id = ""
+  flag.pos = flag.team==0?RED_PRISON_LOC:GREEN_PRISON_LOC
 }
 
 function TeamScored(roomId,team,player_display_name)
@@ -563,7 +567,7 @@ function ResetMap(roomId)
   for(var index in rooms[roomId].flags)
   {
     FlagDropped(rooms[roomId].flags[index])
-    rooms[roomId].flags[index].pos = rooms[roomId].flags[index].team==0? RED_SPAWN : GREEN_SPAWN
+    rooms[roomId].flags[index].pos = rooms[roomId].flags[index].team==0? RED_PRISON_LOC:GREEN_PRISON_LOC
   }
 
   rooms[roomId].GAME_IN_PROGRESS = false
@@ -597,7 +601,7 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     pos : startPos,
     old_pos : startPos,
     team : team,
-    captured : true,
+    captured : false,
     hasFlag : false,
     sprint: false,
     stamina : 100,
@@ -725,7 +729,7 @@ function PositionLimitedByBox(box,player_diameter,next_pos)
 
 function PositionLimitedInsideCircle(center,diameter,player_diameter,oldPos,newPos)
 {
-  var radius = diameter/2
+  var radius = diameter/2-player_diameter/2
   var distanceFromPlayerToCircleCenter = Vector2Magnitude(Vector2Subtraction(newPos,center))
   var displacementY = (newPos.y-center.y)
   var displacementX = (newPos.x-center.x)
@@ -737,6 +741,23 @@ function PositionLimitedInsideCircle(center,diameter,player_diameter,oldPos,newP
   
   return output
 }
+
+function PositionLimitedOutsideCircle(center,diameter,player_diameter,oldPos,newPos)
+{
+  var radius = diameter/2+player_diameter/2
+  var distanceFromPlayerToCircleCenter = Vector2Magnitude(Vector2Subtraction(newPos,center))
+  var displacementY = (newPos.y-center.y)
+  var displacementX = (newPos.x-center.x)
+  var angle = Math.atan2(displacementY,displacementX)
+
+  var magnitude = Math.max(radius,distanceFromPlayerToCircleCenter)
+  var output = {x: center.x + magnitude*Math.cos(angle),y: center.y + magnitude*Math.sin(angle)}
+
+  
+  return output
+}
+
+
 
 //#endregion
 
