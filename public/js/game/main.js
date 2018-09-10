@@ -209,6 +209,8 @@ function AddToChat(content,style)
     td.style('font-size','16px')
     //td.style('padding-left','8px')
     td.style('padding-top','4px')
+
+    event_table.elt.scrollTop = event_table.elt.scrollHeight
 }
 
 //#region ========================================== UI - DOM FUNCTIONS ==========================================
