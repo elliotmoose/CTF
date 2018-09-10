@@ -101,9 +101,6 @@ var quit_button;
 document.bgColor = "#5a5460"
 
 
-var pingSentTime = 0;
-var ping = 0
-
 // socket.on('connect', function () { 
 //     console.log('connected')
 //     socket.on('disconnect', function() {
@@ -420,6 +417,11 @@ function Update()
         socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
     }
 
+    if(keyIsDown(67))
+    {
+        socket.emit('PLAYER_PASSED_FLAG')
+    }
+
     pingCalls["PING-"+pingCounter] = Date.now()
     socket.emit('PING',pingCounter) 
     pingCounter += 1
@@ -681,31 +683,30 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
     //UI
     Scene('GAME')
 
-    console.log("CONNECTED TO ROOM:" + roomName)
     AddToChat('JOINED ROOM: ' + roomName,0)
-    console.log('joined room+' + socket.nsp)
+
     socket.on('FULL_PACKAGE',function(package){
         ReceivePackage(package,socket.nsp)
     })
+
     socket.on('PLAYER_DISCONNECTED',PlayerDisconnected)
     socket.on('IN_GAME_MESSAGE',ReceiveGameMessage)
-    socket.on('disconnect', function() {
-        console.log('disconnected')
-        AddToChat("You have been disconnected. Please refresh the page",0)
-    });
-    socket.on('disconnect',function(){
-        console.log("DISCONNECTED FROM ROOM")
-        // socket.removeAllListeners('send message');
-        //         socket.removeAllListeners('disconnect');
-        //         io.removeAllListeners('connection');
+    
+    socket.on('SERVER_FRAME_CHECK',function(frameCount){
+        AddToChat('SERVER RUNNING AT FRAMES: ' + frameCount,0)
     })
 
     socket.on('PING_RETURN',function(id){
         var callTime = pingCalls["PING-"+id]
         latestPing = Date.now() - callTime
-        console.log(latestPing)
         pingCalls[id] = undefined
     })
+
+    socket.on('disconnect', function() {
+        console.log('disconnected')
+        AddToChat("You have been disconnected. Please refresh the page",0)
+    });
+
 
     //GAME
     CONNECTED_TO_ROOM = true
@@ -716,7 +717,6 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
     
 
     socket.emit('PLAYER_INITIALIZED',this_player_name)
-
 }
 
 //#endregion
