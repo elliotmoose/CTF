@@ -222,8 +222,8 @@ function GetGameTime()
     var time = Math.floor((Date.now() - game_start_time)/1000)
     var mins = Math.floor(time / 60);
     var secs = time - mins * 60;
-    var minString = mins <= 10? `0${mins}`:`${mins}`
-    var secString = secs <= 10? `0${secs}`:`${secs}`
+    var minString = mins < 10? `0${mins}`:`${mins}`
+    var secString = secs < 10? `0${secs}`:`${secs}`
     var formattedTime = `${minString}:${secString}`
     return formattedTime
 }
