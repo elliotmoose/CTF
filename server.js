@@ -13,12 +13,18 @@ const FLAG_HEIGHT = 40
 const PRISON_HEIGHT = 400
 const PRISON_WIDTH = 180
 const PRISON_PADDING = 30
-const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
-const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
+// const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
+// const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
+const PRISON_RADIUS = 150;
+const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
+const GREEN_PRISON_LOC = {x: CANVAS_DIMENSIONS.width-150,y: CANVAS_DIMENSIONS.height/2}
 
 const SPAWN_PADDING = 70
-const RED_SPAWN = {x: SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
-const GREEN_SPAWN = {x:CANVAS_DIMENSIONS.width-SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
+// const RED_SPAWN = {x: SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
+// const GREEN_SPAWN = {x:CANVAS_DIMENSIONS.width-SPAWN_PADDING,y: CANVAS_DIMENSIONS.height/2}
+
+const RED_SPAWN = RED_PRISON_LOC
+const GREEN_SPAWN = GREEN_PRISON_LOC
 
 app.use('/js',express.static(__dirname + "/public/js"))
 app.use('/assets',express.static(__dirname + "/public/assets"))
@@ -85,7 +91,7 @@ function CreateRoom(creator_socket,display_name)
       var vector = {x:request.x-oldPos.x,y: request.y-oldPos.y} //FROM PLAYER TO MOUSE
       var magnitude = Vector2Magnitude(vector)
       
-      if(magnitude > 5)
+      if(magnitude > 2)
       {
           var newPosDir = Vector2Divide(vector, magnitude) //direction vector of where to head
           
@@ -357,21 +363,23 @@ function UpdatePlayerPosition(roomId)
       rooms[roomId].players[playerID].stamina = Math.max((rooms[roomId].players[playerID].stamina-deltaTime*depletionFactor),0) 
     }
 
-    var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
-    
-    //limit
-    var box;
+    var prison_center = thisPlayer.team==0?GREEN_PRISON_LOC:RED_PRISON_LOC
 
+    var oldPos = thisPlayer.pos
+    var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
+    var radius = PRISON_RADIUS
+
+    var finalPos;
     if(thisPlayer.captured)
     {
-        box = thisPlayer.team==1 ? RED_PRISON_RECT : GREEN_PRISON_RECT
+      // finalPos = {x:0,y:0}
+      finalPos = PositionLimitedInsideCircle(prison_center,radius,thisPlayer.stats.diameter,oldPos,newPos)
     }
     else
     {
-        box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
+      finalPos = newPos
     }
 
-    var finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,newPos)
     rooms[roomId].players[playerID].pos = finalPos
     rooms[roomId].players[playerID].newPosDir = null //position has been committed this frame, dont need it anymore
     rooms[roomId].players[playerID].newPosRequestMagnitude = null
@@ -589,7 +597,7 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     pos : startPos,
     old_pos : startPos,
     team : team,
-    captured : false,
+    captured : true,
     hasFlag : false,
     sprint: false,
     stamina : 100,
@@ -712,6 +720,22 @@ function PositionLimitedByBox(box,player_diameter,next_pos)
 
     var output_pos = {x: new_x,y: new_y}
     return output_pos
+}
+
+
+function PositionLimitedInsideCircle(center,diameter,player_diameter,oldPos,newPos)
+{
+  var radius = diameter/2
+  var distanceFromPlayerToCircleCenter = Vector2Magnitude(Vector2Subtraction(newPos,center))
+  var displacementY = (newPos.y-center.y)
+  var displacementX = (newPos.x-center.x)
+  var angle = Math.atan2(displacementY,displacementX)
+
+  var magnitude = Math.min(radius,distanceFromPlayerToCircleCenter)
+  var output = {x: center.x + magnitude*Math.cos(angle),y: center.y + magnitude*Math.sin(angle)}
+
+  
+  return output
 }
 
 //#endregion
