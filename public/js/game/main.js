@@ -80,6 +80,7 @@ var this_player_name = "ANON"
 var CONNECTED_TO_ROOM = false
 var GAME_IN_PROGRESS = false
 var update_clock;
+var game_start_time = 0
 
 //ui elements
 //      ui - intro 
@@ -216,6 +217,16 @@ function setup()
     Scene('INTRO')
 }
 
+function GetGameTime()
+{
+    var time = Math.floor((Date.now() - game_start_time)/1000)
+    var mins = Math.floor(time / 60);
+    var secs = time - mins * 60;
+    var minString = mins <= 10? `0${mins}`:`${mins}`
+    var secString = secs <= 10? `0${secs}`:`${secs}`
+    var formattedTime = `${minString}:${secString}`
+    return formattedTime
+}
 function AddToChat(content,style)
 {
     var td = createElement('td')
@@ -223,7 +234,10 @@ function AddToChat(content,style)
     var date = new Date()
     tr.parent(event_table)
     td.parent(tr)
-    td.html(`${date.getHours()}:${date.getMinutes()}: `+content)
+
+
+
+    td.html(`${GetGameTime()}: `+content)
     td.style('color',EVENTS_TEXT_COLOR)
     td.style('font-size','16px')
     //td.style('padding-left','8px')
@@ -729,12 +743,13 @@ function OnJoinedLobby() //AFTER JOIN LOBBY ===== INIT LOBBY CALLBACKS
     Scene('MENU')
 }
 
-function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
+function OnJoinedRoom(room_metadata) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
 {
     //UI
     Scene('GAME')
 
-    AddToChat('JOINED ROOM: ' + roomName,0)
+    game_start_time = room_metadata.create_time
+    AddToChat('JOINED ROOM: ' + room_metadata.roomId,0)
 
     socket.on('FULL_PACKAGE',function(package){
         ReceivePackage(package,socket.nsp)

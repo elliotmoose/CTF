@@ -120,7 +120,7 @@ function CreateRoom(creator_socket,display_name)
   creator_socket.emit('SET_NAMESPACE',newRoomId) //GET CLIENT TO CONNECT TO ROOM
   
   newRoomSocket.on('connection',function(socket){ //SET CALLBACKS FOR ROOM    
-    socket.emit('JOINED_ROOM',newRoomId)
+    socket.emit('JOINED_ROOM',{roomId: newRoomId, create_time: newRoom.create_time})
     
     socket.on('PLAYER_INITIALIZED',function(display_name){
       NewPlayerConnectedToRoom(newRoomId,socket.id,display_name)
@@ -163,13 +163,19 @@ function CreateRoom(creator_socket,display_name)
 
 
     socket.on('disconnect',function(){
-      var display_name = rooms[newRoomId].players[socket.id].display_name
-      socket.broadcast.emit('PLAYER_DISCONNECTED',rooms[newRoomId].players[socket.id])
-      io.of(newRoomId).emit('IN_GAME_MESSAGE',NewGameMessage(`${display_name} left the room :(`))
-      console.log('PLAYER LEFT GAME: ' + socket.id)
 
-      //LET THE QUEUE REMOVE IT SO NO CONFLICTS
-      playersThatDisconnectedThisUpdate.push({roomId: newRoomId, playerId: socket.id})
+      var player = rooms[newRoomId].players[socket.id]
+
+      if(player != null)
+      {
+        var display_name = player.display_name
+        socket.broadcast.emit('PLAYER_DISCONNECTED',rooms[newRoomId].players[socket.id])
+        io.of(newRoomId).emit('IN_GAME_MESSAGE',NewGameMessage(`${display_name} left the room :(`))
+        console.log('PLAYER LEFT GAME: ' + socket.id)
+  
+        //LET THE QUEUE REMOVE IT SO NO CONFLICTS
+        playersThatDisconnectedThisUpdate.push({roomId: newRoomId, playerId: socket.id})
+      }
     })
   })
 }
@@ -692,6 +698,7 @@ function NewRoomObject(id,display_name)
     players : {},
     flags: [],
     package : {},
+    create_time: Date.now(),
     score: {
       0: 0,
       1: 0
