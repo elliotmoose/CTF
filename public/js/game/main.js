@@ -190,7 +190,7 @@ function setup()
     
     event_table = createElement('tbody')
     event_table.style('width', CANVAS_DIMENSIONS.width+'px')
-    event_table.style('height',eventsTableHeight +'px')
+    event_table.style('height',eventsTableHeight-8 +'px')
     event_table.style('background-color',ROOMS_TABLE_BG_COLOR)
     event_table.style('padding-left','8px')
     event_table.style('padding-top','6px')
@@ -524,6 +524,7 @@ function draw()
         
         fill(WHITE)
         textSize(30);
+        textAlign(CENTER)
         text(`RED: ${scores[0]}`,CANVAS_DIMENSIONS.width/2-180,CANVAS_VERTICAL_OFFSET+45)
         text(`GREEN: ${scores[1]}`,CANVAS_DIMENSIONS.width/2+180,CANVAS_VERTICAL_OFFSET+45)
 
@@ -666,6 +667,12 @@ function draw()
         textSize(20)
         text(`Ping: ${latestPing}`,CANVAS_DIMENSIONS.width - 100,50, 100,30)
         text(`Server Fps: ${latestFrameCount}`,CANVAS_DIMENSIONS.width - 165,18, 165,30)
+
+        //#region ========================================== UI - TIMER ==========================================
+        var timerFontSize = 40
+        textSize(timerFontSize)
+        textAlign(LEFT)
+        text(GetGameTime(),22,CANVAS_DIMENSIONS.height - 22)
     }
     
 
