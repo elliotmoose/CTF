@@ -439,6 +439,7 @@ var framesSinceLastPing = 0
 var pingCounter = 0
 var pingCalls = {}
 var latestPing = 0
+var latestFrameCount = 0
 
 function draw()
 {
@@ -598,9 +599,12 @@ function draw()
         //#endregion
     }
 
-    //COUNT DOWN TEXT
+    
+
+
     if(CONNECTED_TO_ROOM && current_scene == "GAME")
     {
+        //#region ========================================== UI - COUNT DOWN TEXT ==========================================
         noStroke()
         // fill(100,countdownAlpha*100)
         fill(255,255,255,countdownAlpha*255)
@@ -610,11 +614,17 @@ function draw()
 
         countdownAlpha -= 1/frameRate()
 
+        //#endregion
+        
+        //#region ========================================== UI - BENCHMARK UI ==========================================
         fill(WHITE)
         textSize(20)
-        text(`Ping: ${latestPing}`,CANVAS_DIMENSIONS.width - 100,45, 100,30)
-        //PING TEXT
+        text(`Ping: ${latestPing}`,CANVAS_DIMENSIONS.width - 100,50, 100,30)
+        text(`Server Fps: ${latestFrameCount}`,CANVAS_DIMENSIONS.width - 165,18, 165,30)
     }
+    
+
+
 }
 
 
@@ -626,9 +636,6 @@ function windowResized()
 
 function PositionMenuItems()
 {
-
-
-
     name_input.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2,CANVAS_VERTICAL_OFFSET+ CANVAS_DIMENSIONS.height/2-menuItemHeight);
     start_button.position(CANVAS_HORIZONTAL_OFFSET+CANVAS_DIMENSIONS.width/2-menuItemWidth/2, CANVAS_VERTICAL_OFFSET+CANVAS_DIMENSIONS.height/2);
 
@@ -702,7 +709,8 @@ function OnJoinedRoom(roomName) //AFTER JOIN ROOM ===== INIT LOBBY ROOM
     socket.on('IN_GAME_MESSAGE',ReceiveGameMessage)
     
     socket.on('SERVER_FRAME_CHECK',function(frameCount){
-        AddToChat('SERVER RUNNING AT FRAMES: ' + frameCount,0)
+        // AddToChat('SERVER RUNNING AT FRAMES: ' + frameCount,0)
+        latestFrameCount = frameCount
     })
 
     socket.on('PING_RETURN',function(id){

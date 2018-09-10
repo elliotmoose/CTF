@@ -72,6 +72,16 @@ function Update()
     rooms[roomId].package = {}
   }
 
+
+  for(var index in playersThatDisconnectedThisUpdate)
+  {
+    var object = playersThatDisconnectedThisUpdate[index]
+    PlayerDisconnectedFromRoom(object.roomId,object.playerId)
+  }
+
+  playersThatDisconnectedThisUpdate = []
+
+  //#region FRAME CHECK
   if(Date.now() - lastIntervalCheckTime < 1000) //if its under one second since the last check
   {
     updatesSinceLastCheck += 1
@@ -83,14 +93,14 @@ function Update()
     {
       io.of(roomId).emit('SERVER_FRAME_CHECK',updatesSinceLastCheck)
     }
-    
+
     updatesSinceLastCheck = 0
     lastIntervalCheckTime = Date.now()
   }
+
+  //#endregion
   
 }
-
-
 
 
 
@@ -104,18 +114,16 @@ function CreateRoom(creator_socket,display_name)
   rooms[newRoomId] = newRoom //ADD ROOM
   InitializeGameRoom(newRoomId)
   
+
+  console.log("ROOM CREATED: " + newRoomId)
   creator_socket.emit('ON_ROOM_CREATED',newRoomId) //TELL CLIENT HE CREATED ROOM
   creator_socket.emit('SET_NAMESPACE',newRoomId) //GET CLIENT TO CONNECT TO ROOM
   
-  
-  newRoomSocket.on('connection',function(socket){ //SET CALLBACKS FOR ROOM
-    console.log('THIS ROOM JUST GOT A CONNECTION: ' + socket.id)
-        
+  newRoomSocket.on('connection',function(socket){ //SET CALLBACKS FOR ROOM    
     socket.emit('JOINED_ROOM',newRoomId)
     
     socket.on('PLAYER_INITIALIZED',function(display_name){
       NewPlayerConnectedToRoom(newRoomId,socket.id,display_name)
-
       io.of(newRoomId).emit('IN_GAME_MESSAGE',NewGameMessage(`${display_name} joined the room!`))
       console.log('PLAYER JOINED GAME:' + display_name)
     })
@@ -152,25 +160,19 @@ function CreateRoom(creator_socket,display_name)
 
 
     socket.on('disconnect',function(){
-
       var display_name = rooms[newRoomId].players[socket.id].display_name
-      
       socket.broadcast.emit('PLAYER_DISCONNECTED',rooms[newRoomId].players[socket.id])
-      PlayerDisconnectedFromRoom(newRoomId,socket.id)
-
       io.of(newRoomId).emit('IN_GAME_MESSAGE',NewGameMessage(`${display_name} left the room :(`))
       console.log('PLAYER LEFT GAME: ' + socket.id)
 
-      //clean up empty room
-      if(Object.keys(rooms[newRoomId].players).length == 0)
-      {
-        console.log("Room Deleted: " + newRoomId)
-        rooms[newRoomId] = null //delete the room
-      }
+      //LET THE QUEUE REMOVE IT SO NO CONFLICTS
+      playersThatDisconnectedThisUpdate.push({roomId: newRoomId, playerId: socket.id})
     })
   })
-
 }
+
+var playersThatDisconnectedThisUpdate = []
+
 
 function InitializeGameRoom(roomId)
 {
@@ -214,20 +216,32 @@ function NewPlayerConnectedToRoom(roomId,socket_id,player_display_name)
 
 function PlayerDisconnectedFromRoom(roomId,socket_id)
 {
-  var playerTeam = rooms[roomId].players[socket_id].team
-  rooms[roomId].teams_count[playerTeam] -= 1 //update team counter
-  
-  delete rooms[roomId].players[socket_id]
-  
-  //if flag carrier disconnects, drop flag
-  //Should flag be dropped
-  for (var flag of rooms[roomId].flags) 
+  //clean up empty room
+  if(Object.keys(rooms[roomId].players).length == 1) //IF IT IS THE LAST PLAYER -> HE IS ABOUT TO LEAVE
   {
-    if (flag.captured && flag.capturer_id == socket_id) 
-    {
-      FlagDropped(roomId,flag)
-    }
+    console.log("ROOM DELETED: " + roomId)
+    rooms[roomId] = null //delete the room
   }
+  else
+  {
+
+    //if flag carrier disconnects, drop flag
+    //Should flag be dropped
+    for (var flag of rooms[roomId].flags) 
+    {
+      if (flag.captured && flag.capturer_id == socket_id) 
+      {
+        FlagDropped(roomId,flag)
+      }
+    }
+
+    var playerTeam = rooms[roomId].players[socket_id].team
+    rooms[roomId].teams_count[playerTeam] -= 1 //update team counter
+    delete rooms[roomId].players[socket_id]
+  }
+  
+
+
 }
 
 //#endregion
