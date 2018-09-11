@@ -12,22 +12,7 @@ var scoreFontSize = 30
 var scoreTopPadding = 30
 
 const CANVAS_DIMENSIONS = {width: 1600,height: 800}
-const PLAYER_DIAMETER_STANDARD = 25
-const PLAYER_DIAMETER_MEDIUM = 30
-const PLAYER_DIAMETER_SMALL = 20
 const DOCUMENT_MARGIN = 8
-
-const FLAG_HEIGHT = 40
-
-const PRISON_HEIGHT = 400
-const PRISON_WIDTH = 180
-const PRISON_PADDING = 30
-const RED_PRISON_RECT = Box(PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
-const GREEN_PRISON_RECT = Box(CANVAS_DIMENSIONS.width-PRISON_WIDTH-PRISON_PADDING,(CANVAS_DIMENSIONS.height-PRISON_HEIGHT)/2,PRISON_WIDTH,PRISON_HEIGHT)
-
-const PRISON_RADIUS = 150;
-const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
-const GREEN_PRISON_LOC = {x: CANVAS_DIMENSIONS.width-150,y: CANVAS_DIMENSIONS.height/2}
 
 var CANVAS_HORIZONTAL_OFFSET = (window.innerWidth-CANVAS_DIMENSIONS.width)/2;
 var CANVAS_VERTICAL_OFFSET = 22;
@@ -538,14 +523,12 @@ function draw()
         //DRAW RED PRISON
         fillColor = PRISON_GREY
         fill(fillColor)
-        // rect(RED_PRISON_RECT.x,RED_PRISON_RECT.y,RED_PRISON_RECT.width,RED_PRISON_RECT.height)
-        ellipse(RED_PRISON_LOC.x,RED_PRISON_LOC.y,PRISON_RADIUS)
+        ellipse(config.game.prison.location.red.x,config.game.prison.location.red.y,config.game.prison.radius)
         
         //DRAW GREEN PRISON
         fillColor = PRISON_GREY
         fill(fillColor)
-        // rect(GREEN_PRISON_RECT.x,GREEN_PRISON_RECT.y,GREEN_PRISON_RECT.width,GREEN_PRISON_RECT.height)
-        ellipse(GREEN_PRISON_LOC.x,GREEN_PRISON_LOC.y,PRISON_RADIUS)
+        ellipse(config.game.prison.location.green.x,config.game.prison.location.green.y,config.game.prison.radius)
 
         
         fill(WHITE)
@@ -602,39 +585,23 @@ function draw()
             var staminaBarMaxWidth = 75
             var staminaBarCurWidth = stamina/100*staminaBarMaxWidth
             var staminaBarHeight = playerFontHeight
+            var staminaBarRounded = staminaBarHeight/2
             var staminaBarOffset = nameLabelOffset+1
 
-            textAlign(CENTER)
-            textSize(12);
-
-            if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
-            {
-                fill(fillColor)
-                strokeWeight(weight)
-                stroke(strokeColor)    
-                ellipse(thisPlayer.pos.x,thisPlayer.pos.y,playerSize,playerSize)
-
-                noStroke()
-
-                fill(PLAYER_RED)
-                rect(thisPlayer.pos.x-staminaBarMaxWidth/2,thisPlayer.pos.y - staminaBarOffset,staminaBarMaxWidth,staminaBarHeight)
-
-                fill(PLAYER_GREEN)
-                rect(thisPlayer.pos.x-staminaBarMaxWidth/2,thisPlayer.pos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
-
-                //player name
-                fill(WHITE)
-                text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,staminaBarHeight)
-                continue
-            }
 
             var timeDiff = (recentPackageTime-previousPackageTime)
             var lerp_weight = Math.min((timeElapsedSincePackage/timeDiff),1)
+
+            if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
+            {
+                lerp_weight = 1
+            }
+
             var lerp_x = lerp(thisPlayer.old_pos.x,thisPlayer.pos.x,lerp_weight)
             var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
             var lerpPos = {x:lerp_x,y:lerp_y}
 
-            if(thisPlayer.isReaching) //reach line
+            if(thisPlayer.isReaching) //reach circle
             {
                 fill(PRISON_GREY)
                 stroke(GREY)
@@ -642,6 +609,7 @@ function draw()
                 ellipse(lerpPos.x,lerpPos.y,playerSize + thisPlayer.reach*2,playerSize + thisPlayer.reach*2)
             }
 
+            //PLAYER
             fill(fillColor)
             strokeWeight(weight)
             stroke(strokeColor)
@@ -651,12 +619,14 @@ function draw()
             noStroke()
 
             fill(PLAYER_RED)
-            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarMaxWidth,staminaBarHeight)
+            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarMaxWidth,staminaBarHeight,staminaBarRounded)
 
             fill(PLAYER_GREEN)
-            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
+            rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight,staminaBarRounded)
 
             //PLAYER NAME
+            textAlign(CENTER)
+            textSize(12)
             fill(WHITE)
             textSize(playerFontNameSize)
             text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,staminaBarHeight)
@@ -673,16 +643,16 @@ function draw()
 
             if(Vector2Magnitude(Vector2Subtraction(flag.pos,flag.old_pos)) > LERP_TOLERANCE)
             {
-                ellipse(flag.pos.x,flag.pos.y,PLAYER_DIAMETER_STANDARD,PLAYER_DIAMETER_STANDARD)
+                image(team_flag_image,flag.pos.x-config.flag.size/2,flag.pos.y-config.flag.size/2,config.flag.size,config.flag.size)
                 continue
             }
-
+            
             var lerp_weight = Math.min((timeElapsedSincePackage/(recentPackageTime-previousPackageTime)),1)
             var lerp_x = lerp(flag.old_pos.x,flag.pos.x,lerp_weight)
             var lerp_y = lerp(flag.old_pos.y,flag.pos.y,lerp_weight)
             var lerpPos = {x:lerp_x,y:lerp_y}
 
-            image(team_flag_image, lerp_x-FLAG_HEIGHT/2,lerp_y-FLAG_HEIGHT/2,FLAG_HEIGHT,FLAG_HEIGHT)
+            image(team_flag_image, lerp_x-config.flag.size/2,lerp_y-config.flag.size/2,config.flag.size,config.flag.size)
         }
         //#endregion
     }

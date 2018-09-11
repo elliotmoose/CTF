@@ -4,6 +4,8 @@ var http = require('http').Server(app);
 var io = require('socket.io').listen(http)
 var config = require('./public/js/game/config')
 
+var rooms = {}
+
 //#region server init
 app.use('/js',express.static(__dirname + "/public/js"))
 app.use('/assets',express.static(__dirname + "/public/assets"))
@@ -20,21 +22,8 @@ var callRate = 20
 var update_clock = setInterval(Update,1000/callRate)
 //#endregion
 
-//#region SERVER LOBBY
 
-// var lobby = io.of('/lobby')
-var rooms = {}
-
-var roomIdCounter = 0
-function GetnewRoomId()
-{
-  roomIdCounter+=1
-  return "/room-" + roomIdCounter
-}
-
-
-//#endregion
-
+//#region =================================== UPDATE ===================================
 var lastIntervalCheckTime = 1
 var updatesSinceLastCheck = 0
 function Update()
@@ -89,10 +78,18 @@ function Update()
   
 }
 
-
+//#endregion
 
 //#region =================================== GAME SERVER EVENTS ===================================
 var playersThatDisconnectedThisUpdate = []
+
+var roomIdCounter = 0
+function GetnewRoomId()
+{
+  roomIdCounter+=1
+  return "/room-" + roomIdCounter
+}
+
 
 function CreateRoom(creator_socket,display_name)
 {
