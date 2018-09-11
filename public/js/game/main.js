@@ -459,6 +459,15 @@ function Update()
         {
             socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
         }
+
+        if(current_scene == "GAME")
+        {
+            window.onkeydown = function(e) {
+                if (e.keyCode == 32 && e.target == document.body) {
+                  e.preventDefault();
+                }
+            };
+        }
     
         // if(keyIsDown(67))
         // {
