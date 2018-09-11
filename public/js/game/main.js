@@ -489,10 +489,12 @@ function keyPressed() {
         socket.emit('PLAYER_REACH')
     }
 
-    if (keyCode === 32 && document.activeElement != chat_input.elt)
+    if (document.activeElement == chat_input.elt)
     {
-        return false;
+        return true
     }
+
+    return false;
 }
 var framesSinceLastPing = 0
 var pingCounter = 0
