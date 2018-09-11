@@ -544,7 +544,6 @@ function UpdatePlayerPosition(thisRoom)
   }
 }
 
-
 function PlayerCaught(thisRoom,player_caught)
 {
    //Should flag be dropped

@@ -189,6 +189,7 @@ function setup()
 
     
     chat_input = CreateInput('Type to send a message...',0,0,CANVAS_DIMENSIONS.width,chatHeight,chatHeight*3/5,true,null)
+    chat_input.style('text-align','left')
     chat_input.elt.addEventListener("keyup", function(event) {
         // Cancel the default action, if needed
         event.preventDefault();
