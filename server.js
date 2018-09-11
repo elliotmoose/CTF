@@ -632,7 +632,7 @@ function TeamScored(roomId,team,player_display_name)
 {
   rooms[roomId].score[team] += 1
   var teamName = team==0? 'Red' : 'Green'
-  MessageAllClients(roomId,'IN_GAME_MESSAGE',`${player_display_name} Scored For ${teamName} Team! `,0)  
+  //MessageAllClients(roomId,'IN_GAME_MESSAGE',`${player_display_name} Scored For ${teamName} Team! `,0)  
   SendAllClients(roomId,'SCORE',rooms[roomId].score)
 }
 
