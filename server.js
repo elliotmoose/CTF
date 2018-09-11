@@ -386,7 +386,7 @@ function CheckPlayerReach(roomId) //collisions and passing flags
                         }
                     }
 
-                    if(eachPlayer.attemptingPass)
+                    if(eachPlayer.isReaching)
                     {
                       
                       var team = eachPlayer.team
