@@ -111,6 +111,11 @@ document.bgColor = "#5a5460"
 //         console.log('disconnected')
 //     });
 // });
+window.onkeydown = function(e) {
+    if (e.keyCode == 32 && e.target == document.body && current_scene == "GAME" && document.activeElement != chat_input.elt) {
+      e.preventDefault();
+    }
+};
 
 function preload()
 {
@@ -458,15 +463,6 @@ function Update()
         if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
         {
             socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
-        }
-
-        if(current_scene == "GAME")
-        {
-            window.onkeydown = function(e) {
-                if (e.keyCode == 32 && e.target == document.body) {
-                  e.preventDefault();
-                }
-            };
         }
     
         // if(keyIsDown(67))
