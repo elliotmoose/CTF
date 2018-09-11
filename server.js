@@ -4,14 +4,13 @@ var http = require('http').Server(app);
 var io = require('socket.io').listen(http)
 
 const CANVAS_DIMENSIONS = {width: 1600,height: 800}
-const PLAYER_DIAMETER_STANDARD = 25
-const PLAYER_DIAMETER_MEDIUM = 30
-const PLAYER_DIAMETER_SMALL = 20
-const PLAYER_REACH_STANDARD = 15
+const PLAYER_DIAMETER_BIG = 45
+const PLAYER_DIAMETER_MEDIUM = 35
+const PLAYER_DIAMETER_SMALL = 25
+const PLAYER_REACH_STANDARD = 20
+const PLAYER_REACH_TIME_MAX_STANDARD = 0.2
 const FLAG_HEIGHT = 40
 
-
-// console.log(config.PLAYER_DIAMETER_STANDARD)
 
 const PRISON_RADIUS = 150;
 const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
@@ -692,13 +691,13 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     isReaching : false,
     reach: PLAYER_REACH_STANDARD,
     reach_period_cur : 0,
-    reach_period_max : 0.3,
+    reach_period_max : PLAYER_REACH_TIME_MAX_STANDARD,
 
     sprint: false,
     stamina : 100,
     stats : {
       speed : 300,
-      diameter : 40,
+      diameter : PLAYER_DIAMETER_SMALL,
     }
   }
 }

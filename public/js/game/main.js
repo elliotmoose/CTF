@@ -12,7 +12,7 @@ var scoreFontSize = 30
 var scoreTopPadding = 30
 
 const CANVAS_DIMENSIONS = {width: 1600,height: 800}
-const PLAYER_DIAMETER_STANDARD = 40
+const PLAYER_DIAMETER_STANDARD = 25
 const PLAYER_DIAMETER_MEDIUM = 30
 const PLAYER_DIAMETER_SMALL = 20
 const DOCUMENT_MARGIN = 8
@@ -56,6 +56,7 @@ var MAP_GREEN;
 var MAP_RED;
 var WHITE;
 var BLACK;
+var GREY;
 var GOLD;
 var PLAYER_RED;
 var PLAYER_GREEN;
@@ -128,11 +129,11 @@ function setup()
     MAP_RED = color(155, 49, 49)
     WHITE = color(255, 255, 255,255)
     BLACK = color(0)
+    GREY = color(40)
     GOLD = color(255, 207, 34)
     PLAYER_RED = color(252, 93, 93)//red
     PLAYER_GREEN = color(80, 186, 104)//green
     PRISON_GREY = color(50,90)
-    // CANVAS_BG = color(40, 34, 53)
     CANVAS_BG = color(54, 49, 63)
     ROOMS_TITLE_BG_COLOR = color(94, 83, 104)
     ROOMS_TABLE_BG_COLOR = color(46, 39, 53)
@@ -577,13 +578,15 @@ function draw()
 
             var playerSize = thisPlayer.stats.diameter
             var nameLabelWidth = playerSize*2
-            var nameLabelOffset = playerSize*1.1
+            var nameLabelOffset = 40
+            var playerFontNameSize = 12
+            var playerFontHeight = playerFontNameSize+4
 
             var stamina = thisPlayer.stamina
             var staminaBarMaxWidth = 75
             var staminaBarCurWidth = stamina/100*staminaBarMaxWidth
-            var staminaBarHeight = 15
-            var staminaBarOffset = playerSize*1.1
+            var staminaBarHeight = playerFontHeight
+            var staminaBarOffset = nameLabelOffset
 
             textAlign(CENTER)
             textSize(12);
@@ -607,7 +610,7 @@ function draw()
 
                 
                 fill(WHITE)
-                text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,30)
+                text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,staminaBarHeight)
                 continue
             }
 
@@ -619,9 +622,9 @@ function draw()
 
             if(thisPlayer.isReaching) //reach line
             {
-                noFill()
-                stroke(BLACK)
-                strokeWeight(1)
+                fill(PRISON_GREY)
+                stroke(GREY)
+                strokeWeight(0.7)
                 ellipse(lerpPos.x,lerpPos.y,playerSize + thisPlayer.reach*2,playerSize + thisPlayer.reach*2)
             }
 
@@ -630,6 +633,7 @@ function draw()
             stroke(strokeColor)
             ellipse(lerpPos.x,lerpPos.y,playerSize,playerSize)
 
+            //PLAYER STAMINA
             noStroke()
 
             fill(PLAYER_RED)
@@ -638,8 +642,10 @@ function draw()
             fill(PLAYER_GREEN)
             rect(lerpPos.x-staminaBarMaxWidth/2,lerpPos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
 
+            //PLAYER NAME
             fill(WHITE)
-            text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,30)
+            textSize(playerFontNameSize)
+            text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,staminaBarHeight)
 
         }
 
