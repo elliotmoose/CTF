@@ -112,8 +112,6 @@ document.bgColor = "#5a5460"
 //     });
 // });
 
-console.log(config.player.size.standard)
-
 function preload()
 {
     
@@ -489,6 +487,11 @@ function Update()
 function keyPressed() {
     if (keyCode === 67) {
         socket.emit('PLAYER_REACH')
+    }
+
+    if (keyCode === 32 && document.activeElement != chat_input.elt)
+    {
+        return false;
     }
 }
 var framesSinceLastPing = 0
