@@ -451,17 +451,18 @@ function Update()
         return
     }
 
-    if(document.activeElement != chat_input)
+    if(document.activeElement != chat_input.elt)
     {
         if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
         {
             socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
         }
     
-        if(keyIsDown(67))
-        {
-            socket.emit('PLAYER_PASSED_FLAG')
-        }
+        // if(keyIsDown(67))
+        // {
+        //     //socket.emit('PLAYER_PASSED_FLAG')
+            
+        // }
     }
     else
     {
@@ -481,6 +482,11 @@ function Update()
 
 }
 
+function keyPressed() {
+    if (keyCode === 67) {
+        socket.emit('PLAYER_REACH')
+    }
+}
 var framesSinceLastPing = 0
 var pingCounter = 0
 var pingCalls = {}
@@ -566,10 +572,7 @@ function draw()
                 fillColor = teamColor
             }
             
-            fill(fillColor)
-            strokeWeight(weight)
-            stroke(strokeColor)
-            
+
 
             var playerSize = thisPlayer.stats.diameter
             var nameLabelWidth = playerSize*2
@@ -586,6 +589,11 @@ function draw()
 
             if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
             {
+
+            
+                fill(fillColor)
+                strokeWeight(weight)
+                stroke(strokeColor)    
                 ellipse(thisPlayer.pos.x,thisPlayer.pos.y,playerSize,playerSize)
 
                 noStroke()
@@ -608,7 +616,17 @@ function draw()
             var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
             var lerpPos = {x:lerp_x,y:lerp_y}
 
-            ellipse(lerpPos.x,lerpPos.y,PLAYER_DIAMETER_STANDARD,playerSize)
+            if(thisPlayer.isReaching)
+            {
+                noFill()
+                stroke(BLACK)
+                ellipse(lerpPos.x,lerpPos.y,playerSize + thisPlayer.reach*2,playerSize + thisPlayer.reach*2)
+            }
+
+            fill(fillColor)
+            strokeWeight(weight)
+            stroke(strokeColor)
+            ellipse(lerpPos.x,lerpPos.y,playerSize,playerSize)
 
             noStroke()
 
@@ -620,6 +638,7 @@ function draw()
 
             fill(WHITE)
             text(thisPlayer.display_name,lerpPos.x - nameLabelWidth/2,lerpPos.y - nameLabelOffset,nameLabelWidth,30)
+
         }
 
         

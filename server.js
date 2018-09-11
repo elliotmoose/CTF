@@ -11,6 +11,8 @@ const PLAYER_DIAMETER_SMALL = 20
 const FLAG_HEIGHT = 40
 
 
+// console.log(config.PLAYER_DIAMETER_STANDARD)
+
 const PRISON_RADIUS = 150;
 const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
 const GREEN_PRISON_LOC = {x: CANVAS_DIMENSIONS.width-150,y: CANVAS_DIMENSIONS.height/2}
@@ -151,6 +153,10 @@ function CreateRoom(creator_socket,display_name)
 
     socket.on('PLAYER_PASSED_FLAG',function(){
       rooms[newRoomId].players[socket.id].attemptingPass = true
+    })
+
+    socket.on('PLAYER_REACH',function(){
+      rooms[newRoomId].players[socket.id].isReaching = true
     })
 
     socket.on('PLAYER_BROADCAST_MESSAGE',function(message){
@@ -298,6 +304,21 @@ function CheckPlayerReach(roomId) //collisions and passing flags
   {
     //IF THIS WAS MY UPDATE => PLAYER RESPONSIBLE FOR HIS OWN COLLISIONS
     var eachPlayer = rooms[roomId].players[each_player_ID]
+
+    if(!eachPlayer.isReaching)
+    {
+      continue
+    }
+    else
+    {
+      eachPlayer.reach_period_cur += 1
+      
+      if(eachPlayer.reach_period_cur > eachPlayer.reach_period_max*callRate)
+      {
+        eachPlayer.isReaching = false 
+        eachPlayer.reach_period_cur = 0
+      }
+    }
 
     for(var other_player_ID in rooms[roomId].players)
     {
@@ -664,10 +685,15 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     old_pos : startPos,
     waypoint: startPos,
     attemptingPass : false,
-    reach: 20,
     team : team,
     captured : false,
     hasFlag : false,
+    
+    isReaching : false,
+    reach: 30,
+    reach_period_cur : 0,
+    reach_period_max : 0.3,
+
     sprint: false,
     stamina : 100,
     stats : {
@@ -679,7 +705,6 @@ function NewPlayerObject(id,startPos,team,player_display_name)
 
 function NewFlagObject(startPos,team)
 {
-  
   return {
     pos : startPos,
     team: team,
