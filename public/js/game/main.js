@@ -616,10 +616,11 @@ function draw()
             var lerp_y = lerp(thisPlayer.old_pos.y,thisPlayer.pos.y,lerp_weight)
             var lerpPos = {x:lerp_x,y:lerp_y}
 
-            if(thisPlayer.isReaching)
+            if(thisPlayer.isReaching) //reach line
             {
                 noFill()
                 stroke(BLACK)
+                strokeWeight(1)
                 ellipse(lerpPos.x,lerpPos.y,playerSize + thisPlayer.reach*2,playerSize + thisPlayer.reach*2)
             }
 
