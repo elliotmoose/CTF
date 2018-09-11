@@ -336,7 +336,7 @@ function CheckPlayerReach(roomId) //collisions and passing flags
         if(distanceFromMeToPlayer < minReachDistance)
         {
             var dirVector = Vector2Divide(vectorFromMeToPlayer,distanceFromMeToPlayer)
-            var pointOfContact = Vector2Addition(eachPlayer.pos,Vector2Multiply(dirVector,eachPlayer.stats.diameter/2))  //NOTE: USES MY PLAYER DIAMETER BECAUSE IM CHECKING FROM MYSELF...??
+            var pointOfContact = Vector2Addition(eachPlayer.pos,Vector2Multiply(dirVector,eachPlayer.stats.diameter/2 + eachPlayer.reach))  //NOTE: USES MY PLAYER DIAMETER BECAUSE IM CHECKING FROM MYSELF...??
           
             //POINT OF COLLISION
             if(other_player.team != eachPlayer.team) //SMTH MUST HAPPEN
