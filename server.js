@@ -362,11 +362,11 @@ function CheckPlayerReach(thisRoom) //collisions and passing flags
                     {
                         if(other_player.captured) //if he was the one captured
                         {
-                          PlayerFreed(roomId,other_player)
+                          PlayerFreed(thisRoom,other_player)
                         }
                         else if(eachPlayer.captured) //if i was captured
                         {
-                          PlayerFreed(roomId,eachPlayer)
+                          PlayerFreed(thisRoom,eachPlayer)
                         }
                     }
 
@@ -449,13 +449,13 @@ function UpdateFlagPosition(thisRoom)
 
     if(flag == null)
     {
-      // continue
+      continue
     }
 
     if(flag.captured)
     {  
       //============================== UPDATE FLAG POSITION ==============================
-      thisRoom.flags[index].pos = thisRoom.players[flag.capturer_id].pos
+      flag.pos = thisRoom.players[flag.capturer_id].pos
     }
     else
     {
