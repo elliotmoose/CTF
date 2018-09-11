@@ -25,11 +25,11 @@ var update_clock = setInterval(Update,1000/callRate)
 // var lobby = io.of('/lobby')
 var rooms = {}
 
-var roomId = 0
+var roomIdCounter = 0
 function GetnewRoomId()
 {
-  roomId+=1
-  return "/room-" + roomId
+  roomIdCounter+=1
+  return "/room-" + roomIdCounter
 }
 
 
@@ -47,16 +47,16 @@ function Update()
       continue
     }
 
-    UpdateFlagPosition(roomId)
-    UpdatePlayerPosition(roomId)
-    CheckPlayerReach(roomId)
-    CheckWinCondition(roomId)
+    UpdateFlagPosition(thisRoom)
+    UpdatePlayerPosition(thisRoom)
+    CheckPlayerReach(thisRoom)
+    CheckWinCondition(thisRoom)
 
-    rooms[roomId].package['players'] = rooms[roomId].players
-    rooms[roomId].package['flags'] = rooms[roomId].flags
-    io.of(roomId).emit('FULL_PACKAGE',rooms[roomId].package)
+    thisRoom.package['players'] = thisRoom.players
+    thisRoom.package['flags'] = thisRoom.flags
+    io.of(roomId).emit('FULL_PACKAGE',thisRoom.package)
 
-    rooms[roomId].package = {}
+    thisRoom.package = {}
   }
 
 
@@ -282,12 +282,12 @@ io.on('connection', function (socket) {
 //#endregion
 
 //#region =================================== LOCAL GAME MANAGEMENT ===================================
-function CheckPlayerReach(roomId) //collisions and passing flags
+function CheckPlayerReach(thisRoom) //collisions and passing flags
 {
-  for(var each_player_ID in rooms[roomId].players)
+  for(var each_player_ID in thisRoom.players)
   {
     //IF THIS WAS MY UPDATE => PLAYER RESPONSIBLE FOR HIS OWN COLLISIONS
-    var eachPlayer = rooms[roomId].players[each_player_ID]
+    var eachPlayer = thisRoom.players[each_player_ID]
 
     if(!eachPlayer.isReaching)
     {
@@ -304,7 +304,7 @@ function CheckPlayerReach(roomId) //collisions and passing flags
       }
     }
 
-    for(var other_player_ID in rooms[roomId].players)
+    for(var other_player_ID in thisRoom.players)
     {
         //ignore if is same himself
         if(other_player_ID == each_player_ID)
@@ -312,7 +312,7 @@ function CheckPlayerReach(roomId) //collisions and passing flags
             continue
         }
 
-        var other_player = rooms[roomId].players[other_player_ID]
+        var other_player = thisRoom.players[other_player_ID]
         var vectorFromMeToPlayer = Vector2Subtraction(other_player.pos,eachPlayer.pos)
         var distanceFromMeToPlayer = Vector2Magnitude(vectorFromMeToPlayer)
         var minReachDistance = other_player.stats.diameter/2 + eachPlayer.stats.diameter/2 + eachPlayer.reach
@@ -332,25 +332,25 @@ function CheckPlayerReach(roomId) //collisions and passing flags
                         if (eachPlayer.team == 1) //if it was my side
                         {
                             //he gets caught
-                            PlayerCaught(roomId,other_player)
+                            PlayerCaught(thisRoom,other_player)
 
                         }
                         else //it was his side
                         {
                             //i get caught
-                            PlayerCaught(roomId,eachPlayer)
+                            PlayerCaught(thisRoom,eachPlayer)
                         }
                     }
                     else {
                         if (eachPlayer.team == 0) //if it was his side
                         {
                             //he gets caught
-                            PlayerCaught(roomId,other_player)
+                            PlayerCaught(thisRoom,other_player)
                         }
                         else //it was his side
                         {
                             //i get caught
-                            PlayerCaught(roomId,eachPlayer)
+                            PlayerCaught(thisRoom,eachPlayer)
                         }
                     }
                 }
@@ -374,14 +374,15 @@ function CheckPlayerReach(roomId) //collisions and passing flags
                     {
                       
                       var team = eachPlayer.team
-                      for(var index in rooms[roomId].flags)
+                      for(var index in thisRoom.flags)
                       {
-                        if(rooms[roomId].flags[index].team != team)
+                        var thisFlag = thisRoom.flags[index]
+                        if(thisFlag.team != team && thisFlag.capturer_id == eachPlayer.id) //if this is opponent flag and its captured by me, then pass
                         {
-                          rooms[roomId].flags[index].capturer_id = other_player.id //this is called when other player is already within reach
-                          rooms[roomId].flags[index].pos = other_player.pos
+                          thisRoom.flags[index].capturer_id = other_player.id //this is called when other player is already within reach
+                          thisRoom.flags[index].pos = other_player.pos
                           console.log("FLAG PASSED TO" + other_player.display_name)
-                          rooms[roomId].players[each_player_ID].attemptingPass = false
+                          thisRoom.players[each_player_ID].attemptingPass = false
                           
                         }
                       }
@@ -394,9 +395,9 @@ function CheckPlayerReach(roomId) //collisions and passing flags
   }
 }
 
-function CheckWinCondition(roomId)
+function CheckWinCondition(thisRoom)
 {
-  for(var flag of rooms[roomId].flags)
+  for(var flag of thisRoom.flags)
   {
     //============================== FLAG WIN CONDITION ==============================
     if(flag.pos.x > config.CANVAS_DIMENSIONS.width/2 ) //if on green side
@@ -404,7 +405,7 @@ function CheckWinCondition(roomId)
       if (flag.team == 0 && flag.captured)
       {
         //win
-        var player = rooms[roomId].players[flag.capturer_id]
+        var player = thisRoom.players[flag.capturer_id]
         var player_display_name = ""
 
         if(NotNull(player))
@@ -413,16 +414,16 @@ function CheckWinCondition(roomId)
         }
 
 
-        TeamScored(roomId,1,player_display_name)
-        ResetMap(roomId)
-        BeginCountdown(roomId)
+        TeamScored(thisRoom,1,player_display_name)
+        ResetMap(thisRoom)
+        BeginCountdown(thisRoom)
       }
     }
     else
     {
       if (flag.team == 1 && flag.captured)
       {
-        var player = rooms[roomId].players[flag.capturer_id]
+        var player = thisRoom.players[flag.capturer_id]
         var player_display_name = ""
 
         if(NotNull(player))
@@ -431,20 +432,20 @@ function CheckWinCondition(roomId)
         }
 
         //win
-        TeamScored(roomId,0,player_display_name)
-        ResetMap(roomId)
-        BeginCountdown(roomId)
+        TeamScored(thisRoom,0,player_display_name)
+        ResetMap(thisRoom)
+        BeginCountdown(thisRoom)
       }
     }
   }
 }
 
-function UpdateFlagPosition(roomId)
+function UpdateFlagPosition(thisRoom)
 {
   //============================== UPDATE FLAG DATA ==============================
-  for(var index in rooms[roomId].flags)
+  for(var index in thisRoom.flags)
   {
-    var flag = rooms[roomId].flags[index]
+    var flag = thisRoom.flags[index]
 
     if(flag == null)
     {
@@ -454,28 +455,28 @@ function UpdateFlagPosition(roomId)
     if(flag.captured)
     {  
       //============================== UPDATE FLAG POSITION ==============================
-      rooms[roomId].flags[index].pos = rooms[roomId].players[flag.capturer_id].pos
+      thisRoom.flags[index].pos = thisRoom.players[flag.capturer_id].pos
     }
     else
     {
       //============================== FLAG CAPTURING ==============================
-      for(var playerID in rooms[roomId].players)
+      for(var playerID in thisRoom.players)
       {
-        if(ShouldFlagBeCaptured(rooms[roomId].players[playerID],flag))
+        if(ShouldFlagBeCaptured(thisRoom.players[playerID],flag))
         {
-          FlagCapturedBy(rooms[roomId].players[playerID],flag)
+          FlagCapturedBy(thisRoom.players[playerID],flag)
         }
       }
     }
   }
 }
 
-function UpdatePlayerPosition(roomId)
+function UpdatePlayerPosition(thisRoom)
 {
   var deltaTime = 1000/callRate
-  for(var playerID in rooms[roomId].players)
+  for(var playerID in thisRoom.players)
   {    
-    var thisPlayer = rooms[roomId].players[playerID]
+    var thisPlayer = thisRoom.players[playerID]
 
     var sprint_multiplier = 1
     var recoveryFactor = 0.02 //100 stamina will recover 1000 (milliseconds) * factor
@@ -485,7 +486,7 @@ function UpdatePlayerPosition(roomId)
     {
       //Player did not request this round
       //stamina
-      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
+      thisRoom.players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
       continue
     }
 
@@ -497,7 +498,7 @@ function UpdatePlayerPosition(roomId)
 
     if(distanceFromWaypoint <= 10)
     {
-      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
+      thisRoom.players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
       continue
     }
     
@@ -511,7 +512,7 @@ function UpdatePlayerPosition(roomId)
     }
     else
     {
-      rooms[roomId].players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
+      thisRoom.players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
     }
 
     var newPosDirMagnitude = deltaTime*thisPlayer.stats.speed/1000*sprint_multiplier
@@ -520,7 +521,7 @@ function UpdatePlayerPosition(roomId)
 
     if(thisPlayer.stamina > 0 && thisPlayer.sprint)
     {
-      rooms[roomId].players[playerID].stamina = Math.max((rooms[roomId].players[playerID].stamina-deltaTime*depletionFactor),0) 
+      thisRoom.players[playerID].stamina = Math.max((thisRoom.players[playerID].stamina-deltaTime*depletionFactor),0) 
     }
 
     var prison_center = thisPlayer.team==0?config.game.prison.location.green:config.game.prison.location.red
@@ -544,15 +545,15 @@ function UpdatePlayerPosition(roomId)
 
     var box = Box(0,0,config.CANVAS_DIMENSIONS.width,config.CANVAS_DIMENSIONS.height)
     finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,finalPos)
-    rooms[roomId].players[playerID].pos = finalPos
+    thisRoom.players[playerID].pos = finalPos
   }
 }
 
 
-function PlayerCaught(roomId,player_caught)
+function PlayerCaught(thisRoom,player_caught)
 {
    //Should flag be dropped
-   for(var flag of rooms[roomId].flags)
+   for(var flag of thisRoom.flags)
    {
      if(flag.captured && flag.capturer_id == player_caught.id)
      {
@@ -561,18 +562,18 @@ function PlayerCaught(roomId,player_caught)
    }
 
    //Update player state (flag drop first)
-   rooms[roomId].players[player_caught.id].captured = true
-   rooms[roomId].players[player_caught.id].pos = player_caught.team==0?config.game.prison.location.green:config.game.prison.location.red
+   thisRoom.players[player_caught.id].captured = true
+   thisRoom.players[player_caught.id].pos = player_caught.team==0?config.game.prison.location.green:config.game.prison.location.red
 }
 
-function PlayerFreed(roomId,player_freed){
-  if(rooms[roomId] != null)
+function PlayerFreed(thisRoom,player_freed){
+  if(thisRoom != null)
   {
-    rooms[roomId].players[player_freed.id].captured = false
+    thisRoom.players[player_freed.id].captured = false
   }
   else
   {
-    console.log("ERROR COULD NOT FIND ROOM WITH ID: "+ roomId)
+    console.log("ERROR COULD NOT FIND ROOM WITH ID: "+ thisRoom.id)
   }
 }
 
@@ -612,46 +613,46 @@ function FlagDropped(flag)
   flag.pos = flag.team==0?config.game.prison.location.red:config.game.prison.location.green
 }
 
-function TeamScored(roomId,team,player_display_name)
+function TeamScored(thisRoom,team,player_display_name)
 {
-  rooms[roomId].score[team] += 1
+  thisRoom.score[team] += 1
   var teamName = team==0? 'Red' : 'Green'
   //MessageAllClients(roomId,'IN_GAME_MESSAGE',`${player_display_name} Scored For ${teamName} Team! `,0)  
-  SendAllClients(roomId,'SCORE',rooms[roomId].score)
+  SendAllClients(thisRoom,'SCORE',thisRoom.score)
 }
 
-function ResetMap(roomId)
+function ResetMap(thisRoom)
 {
-  for(var playerID in rooms[roomId].players)
+  for(var playerID in thisRoom.players)
   {
-    rooms[roomId].players[playerID].pos = rooms[roomId].players[playerID].team==0 ? config.game.spawn.location.red : config.game.spawn.location.green
-    rooms[roomId].players[playerID].waypoint = rooms[roomId].players[playerID].pos
-    rooms[roomId].players[playerID].stamina = 100
-    rooms[roomId].players[playerID].captured = false
-    rooms[roomId].players[playerID].hasFlag = false
+    thisRoom.players[playerID].pos = thisRoom.players[playerID].team==0 ? config.game.spawn.location.red : config.game.spawn.location.green
+    thisRoom.players[playerID].waypoint = thisRoom.players[playerID].pos
+    thisRoom.players[playerID].stamina = 100
+    thisRoom.players[playerID].captured = false
+    thisRoom.players[playerID].hasFlag = false
   }
 
-  for(var index in rooms[roomId].flags)
+  for(var index in thisRoom.flags)
   {
-    FlagDropped(rooms[roomId].flags[index])
-    rooms[roomId].flags[index].pos = rooms[roomId].flags[index].team==0? config.game.prison.location.red:config.game.prison.location.green
+    FlagDropped(thisRoom.flags[index])
+    thisRoom.flags[index].pos = thisRoom.flags[index].team==0? config.game.prison.location.red:config.game.prison.location.green
   }
 
-  rooms[roomId].GAME_IN_PROGRESS = false
+  thisRoom.GAME_IN_PROGRESS = false
   // io.sockets.emit('RESET',players,flags)
-  SendAllClients(roomId, 'RESET',{players: rooms[roomId].players,flags: rooms[roomId].flags})
+  SendAllClients(thisRoom, 'RESET',{players: thisRoom.players,flags: thisRoom.flags})
 }
 
-function BeginCountdown(roomId)
+function BeginCountdown(thisRoom)
 {
   //SendAllClients('COUNTDOWN_BEGIN',1)
-  SendAllClients(roomId,'COUNTDOWN_BEGIN',1)
+  SendAllClients(thisRoom,'COUNTDOWN_BEGIN',1)
 
   // io.sockets.emit('SERVER_EVENT',ServerMessageObject('COUNTDOWN_BEGIN'))
   setTimeout(function(){
     //GAME STARTED 
-    rooms[roomId].GAME_IN_PROGRESS = true
-    SendAllClients(roomId,'GAME_BEGIN',1)
+    thisRoom.GAME_IN_PROGRESS = true
+    SendAllClients(thisRoom,'GAME_BEGIN',1)
     // io.sockets.emit('SERVER_EVENT',ServerMessageObject('GAME_BEGIN'))
   },3000)
 }
@@ -836,9 +837,9 @@ function PositionLimitedOutsideCircle(center,diameter,player_diameter,oldPos,new
 
 //#endregion
 
-function SendAllClients(roomId,key,params)
+function SendAllClients(thisRoom,key,params)
 {
-  rooms[roomId].package[key] = params
+  thisRoom.package[key] = params
 }
 
 function MessageAllClients(roomId,key,content,style)
