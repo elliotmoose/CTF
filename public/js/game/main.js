@@ -321,6 +321,7 @@ function Scene(name)
 
     in_game_menu = false
     countingDown = false
+    clearInterval(counterInterval)
 
     name_input.hide()
     start_button.hide()
@@ -885,6 +886,8 @@ function ReceivePackage(package,nsp){
         {
             flags[index].old_pos = flags[index].pos
         }
+
+        clearInterval(counterInterval)
     }
 
     if(package["COUNTDOWN_BEGIN"] != null)
@@ -912,7 +915,6 @@ function ReceivePackage(package,nsp){
 
     if(package['GAME_BEGIN'] != null)
     {
-
         clearInterval(counterInterval)
         countingDown = false
     }

@@ -4,10 +4,10 @@ var http = require('http').Server(app);
 var io = require('socket.io').listen(http)
 
 const CANVAS_DIMENSIONS = {width: 1600,height: 800}
-const PLAYER_DIAMETER_STANDARD = 40
+const PLAYER_DIAMETER_STANDARD = 25
 const PLAYER_DIAMETER_MEDIUM = 30
 const PLAYER_DIAMETER_SMALL = 20
-
+const PLAYER_REACH_STANDARD = 15
 const FLAG_HEIGHT = 40
 
 
@@ -690,7 +690,7 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     hasFlag : false,
     
     isReaching : false,
-    reach: 30,
+    reach: PLAYER_REACH_STANDARD,
     reach_period_cur : 0,
     reach_period_max : 0.3,
 
