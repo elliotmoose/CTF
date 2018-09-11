@@ -495,7 +495,7 @@ function UpdatePlayerPosition(thisRoom)
 
     if(distanceFromWaypoint <= 10)
     {
-      thisRoom.players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
+      thisPlayer.stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor*3) //recovers thrice as fast when not moving 
       continue
     }
     
@@ -509,7 +509,7 @@ function UpdatePlayerPosition(thisRoom)
     }
     else
     {
-      thisRoom.players[playerID].stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
+      thisPlayer.stamina = Math.min(100,thisPlayer.stamina+deltaTime*recoveryFactor) 
     }
 
     var newPosDirMagnitude = deltaTime*thisPlayer.stats.speed/1000*sprint_multiplier
@@ -518,13 +518,12 @@ function UpdatePlayerPosition(thisRoom)
 
     if(thisPlayer.stamina > 0 && thisPlayer.sprint)
     {
-      thisRoom.players[playerID].stamina = Math.max((thisRoom.players[playerID].stamina-deltaTime*depletionFactor),0) 
+      thisPlayer.stamina = Math.max((thisPlayer.stamina-deltaTime*depletionFactor),0) 
     }
 
     var prison_center = thisPlayer.team==0?config.game.prison.location.green:config.game.prison.location.red
     var base_center = thisPlayer.team==1?config.game.prison.location.green:config.game.prison.location.red
 
-    var oldPos = thisPlayer.pos
     var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
     var radius = config.game.prison.radius
 
@@ -532,17 +531,16 @@ function UpdatePlayerPosition(thisRoom)
 
     if(thisPlayer.captured)
     {
-      // finalPos = {x:0,y:0}
-      finalPos = PositionLimitedInsideCircle(prison_center,radius,thisPlayer.stats.diameter,oldPos,newPos)
+      finalPos = PositionLimitedInsideCircle(prison_center,radius,thisPlayer.stats.diameter,newPos)
     }
     else
     {
-      finalPos = PositionLimitedOutsideCircle(base_center,radius,thisPlayer.stats.diameter,oldPos,newPos)
+      finalPos = PositionLimitedOutsideCircle(base_center,radius,thisPlayer.stats.diameter,newPos)
     }
 
     var box = Box(0,0,config.CANVAS_DIMENSIONS.width,config.CANVAS_DIMENSIONS.height)
     finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,finalPos)
-    thisRoom.players[playerID].pos = finalPos
+    thisPlayer.pos = finalPos
   }
 }
 
@@ -760,47 +758,18 @@ function Box(x,y,width,height)
 
 function PositionLimitedByBox(box,player_diameter,next_pos)
 {
-    var x = box.x
-    var y = box.y
-    var width = box.width
-    var height = box.height
-
-    var new_x = 0
-    var new_y = 0
     var player_radius = player_diameter/2
 
-    if(next_pos.x-player_radius < x) //left bound
-    {
-        new_x = x+player_radius
-    }
-    else if(next_pos.x+player_radius > x+width) //right bound
-    {
-        new_x = x+width-player_radius
-    }
-    else
-    {
-        new_x = next_pos.x
-    }
+    var x_right_bounded = Math.min(box.width-player_radius,next_pos.x)
+    var x = Math.max(0+player_radius,x_right_bounded) 
 
-    if(next_pos.y-player_radius < y) //top bound
-    {
-        new_y = y+player_radius
-    }
-    else if(next_pos.y+player_radius > y+height) //bottom bound
-    {
-        new_y = y+height-player_radius
-    }
-    else
-    {
-        new_y = next_pos.y
-    }
-
-    var output_pos = {x: new_x,y: new_y}
-    return output_pos
+    var y_bottom_bounded = Math.min(box.height-player_radius,next_pos.y)
+    var y = Math.max(0+player_radius,y_bottom_bounded) 
+    return {x: x,y: y}
 }
 
 
-function PositionLimitedInsideCircle(center,diameter,player_diameter,oldPos,newPos)
+function PositionLimitedInsideCircle(center,diameter,player_diameter,newPos)
 {
   var radius = diameter/2-player_diameter/2
   var distanceFromPlayerToCircleCenter = Vector2Magnitude(Vector2Subtraction(newPos,center))
@@ -815,8 +784,13 @@ function PositionLimitedInsideCircle(center,diameter,player_diameter,oldPos,newP
   return output
 }
 
-function PositionLimitedOutsideCircle(center,diameter,player_diameter,oldPos,newPos)
+function PositionLimitedOutsideCircle(center,diameter,player_diameter,newPos)
 {
+  if(Vector2Magnitude(Vector2Subtraction(newPos,center)) > diameter + 50) // if the person is not even in range
+  {
+    return newPos
+  }
+
   var radius = diameter/2+player_diameter/2
   var distanceFromPlayerToCircleCenter = Vector2Magnitude(Vector2Subtraction(newPos,center))
   var displacementY = (newPos.y-center.y)
