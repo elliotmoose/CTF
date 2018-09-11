@@ -494,6 +494,11 @@ function keyPressed() {
         return true
     }
 
+    if (current_scene != "GAME")
+    {
+        return true
+    }
+
     return false;
 }
 var framesSinceLastPing = 0
