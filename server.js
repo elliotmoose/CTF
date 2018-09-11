@@ -2,23 +2,9 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io').listen(http)
+var config = require('./public/js/game/config')
 
-const CANVAS_DIMENSIONS = {width: 1600,height: 800}
-const PLAYER_DIAMETER_BIG = 45
-const PLAYER_DIAMETER_MEDIUM = 35
-const PLAYER_DIAMETER_SMALL = 25
-const PLAYER_REACH_STANDARD = 20
-const PLAYER_REACH_TIME_MAX_STANDARD = 0.2
-const FLAG_HEIGHT = 40
-
-
-const PRISON_RADIUS = 150;
-const RED_PRISON_LOC = {x: 150,y: CANVAS_DIMENSIONS.height/2}
-const GREEN_PRISON_LOC = {x: CANVAS_DIMENSIONS.width-150,y: CANVAS_DIMENSIONS.height/2}
-
-const RED_SPAWN = {x: 12,y: CANVAS_DIMENSIONS.height/2}
-const GREEN_SPAWN = {x: CANVAS_DIMENSIONS.width-12,y: CANVAS_DIMENSIONS.height/2}
-
+//#region server init
 app.use('/js',express.static(__dirname + "/public/js"))
 app.use('/assets',express.static(__dirname + "/public/assets"))
 
@@ -30,15 +16,14 @@ http.listen(8080, function(){
   console.log('listening on 8080');
 });
 
-
 var callRate = 20
 var update_clock = setInterval(Update,1000/callRate)
+//#endregion
 
 //#region SERVER LOBBY
 
 // var lobby = io.of('/lobby')
 var rooms = {}
-
 
 var roomId = 0
 function GetnewRoomId()
@@ -56,7 +41,8 @@ function Update()
 {
   for(var roomId in rooms)
   {
-    if(rooms[roomId] == null)
+    var thisRoom = rooms[roomId]
+    if(thisRoom == null)
     {
       continue
     }
@@ -106,6 +92,7 @@ function Update()
 
 
 //#region =================================== GAME SERVER EVENTS ===================================
+var playersThatDisconnectedThisUpdate = []
 
 function CreateRoom(creator_socket,display_name)
 {
@@ -124,7 +111,7 @@ function CreateRoom(creator_socket,display_name)
     socket.emit('JOINED_ROOM',{roomId: newRoomId, create_time: newRoom.create_time})
     
     socket.on('PLAYER_INITIALIZED',function(display_name){
-      NewPlayerConnectedToRoom(newRoomId,socket.id,display_name)
+      NewPlayerConnectedToRoom(newRoom,socket.id,display_name)
       io.of(newRoomId).emit('IN_GAME_MESSAGE',NewGameMessage(`${display_name} joined the room!`))
       console.log('PLAYER JOINED GAME:' + display_name)
     })
@@ -185,47 +172,45 @@ function CreateRoom(creator_socket,display_name)
   })
 }
 
-var playersThatDisconnectedThisUpdate = []
-
-
 function InitializeGameRoom(roomId)
 {
-  var greenFlag = NewFlagObject(GREEN_PRISON_LOC,1)
-  var redFlag = NewFlagObject(RED_PRISON_LOC,0)
-  rooms[roomId].flags.push(greenFlag)
-  rooms[roomId].flags.push(redFlag)
-  rooms[roomId].GAME_IN_PROGRESS = true
+  var thisRoom = rooms[roomId]
+  var greenFlag = NewFlagObject(config.game.prison.location.green,1)
+  var redFlag = NewFlagObject(config.game.prison.location.red,0)
+  thisRoom.flags.push(greenFlag)
+  thisRoom.flags.push(redFlag)
+  thisRoom.GAME_IN_PROGRESS = true
 }
 
-function NewPlayerConnectedToRoom(roomId,socket_id,player_display_name)
+function NewPlayerConnectedToRoom(thisRoom,socket_id,player_display_name)
 {
-  var room = rooms[roomId]
+  // var thisRoom = rooms[roomId]
 
-  if(!NotNull(room))
+  if(!NotNull(thisRoom))
   {
     console.log('WARNING: room found to be null')
     return
   }
 
-  var count0 = room.teams_count[0]
-  var count1 = room.teams_count[1]
+  var count0 = thisRoom.teams_count[0]
+  var count1 = thisRoom.teams_count[1]
   var teamToAddPlayerTo = 0 //red
   //if(room.teams_count[0] > rooms.teams_count[1])
   if(count0 >= count1)
   {
     teamToAddPlayerTo = 1 //green
-    rooms[roomId].teams_count[teamToAddPlayerTo] += 1
+    thisRoom.teams_count[teamToAddPlayerTo] += 1
   }
   else
   {
     teamToAddPlayerTo = 0//red
-    rooms[roomId].teams_count[teamToAddPlayerTo] += 1
+    thisRoom.teams_count[teamToAddPlayerTo] += 1
   }
 
-  var spawnPos = teamToAddPlayerTo==0? RED_SPAWN : GREEN_SPAWN
+  var spawnPos = teamToAddPlayerTo==0? config.game.spawn.location.red : config.game.spawn.location.green
   var newPlayer = NewPlayerObject(socket_id,spawnPos,teamToAddPlayerTo,player_display_name);
 
-  rooms[roomId].players[socket_id] = newPlayer; 
+  thisRoom.players[socket_id] = newPlayer; 
 }
 
 function PlayerDisconnectedFromRoom(roomId,socket_id)
@@ -342,7 +327,7 @@ function CheckPlayerReach(roomId) //collisions and passing flags
             {
                 if (other_player.captured == false && eachPlayer.captured == false) 
                 {
-                    if (pointOfContact.x > CANVAS_DIMENSIONS.width / 2) //if contact green side and i am green
+                    if (pointOfContact.x > config.CANVAS_DIMENSIONS.width / 2) //if contact green side and i am green
                     {
                         if (eachPlayer.team == 1) //if it was my side
                         {
@@ -414,7 +399,7 @@ function CheckWinCondition(roomId)
   for(var flag of rooms[roomId].flags)
   {
     //============================== FLAG WIN CONDITION ==============================
-    if(flag.pos.x > CANVAS_DIMENSIONS.width/2 ) //if on green side
+    if(flag.pos.x > config.CANVAS_DIMENSIONS.width/2 ) //if on green side
     {
       if (flag.team == 0 && flag.captured)
       {
@@ -521,7 +506,7 @@ function UpdatePlayerPosition(roomId)
     { 
       if(thisPlayer.stamina > 0)
       {
-        sprint_multiplier = 1.6
+        sprint_multiplier = 1.9
       }
     }
     else
@@ -538,12 +523,12 @@ function UpdatePlayerPosition(roomId)
       rooms[roomId].players[playerID].stamina = Math.max((rooms[roomId].players[playerID].stamina-deltaTime*depletionFactor),0) 
     }
 
-    var prison_center = thisPlayer.team==0?GREEN_PRISON_LOC:RED_PRISON_LOC
-    var base_center = thisPlayer.team==1?GREEN_PRISON_LOC:RED_PRISON_LOC
+    var prison_center = thisPlayer.team==0?config.game.prison.location.green:config.game.prison.location.red
+    var base_center = thisPlayer.team==1?config.game.prison.location.green:config.game.prison.location.red
 
     var oldPos = thisPlayer.pos
     var newPos = Vector2Addition(thisPlayer.pos,Vector2Multiply(newPosDir,finalMagnitude))
-    var radius = PRISON_RADIUS
+    var radius = config.game.prison.radius
 
     var finalPos;
 
@@ -557,7 +542,7 @@ function UpdatePlayerPosition(roomId)
       finalPos = PositionLimitedOutsideCircle(base_center,radius,thisPlayer.stats.diameter,oldPos,newPos)
     }
 
-    var box = Box(0,0,CANVAS_DIMENSIONS.width,CANVAS_DIMENSIONS.height)
+    var box = Box(0,0,config.CANVAS_DIMENSIONS.width,config.CANVAS_DIMENSIONS.height)
     finalPos = PositionLimitedByBox(box,thisPlayer.stats.diameter,finalPos)
     rooms[roomId].players[playerID].pos = finalPos
   }
@@ -577,7 +562,7 @@ function PlayerCaught(roomId,player_caught)
 
    //Update player state (flag drop first)
    rooms[roomId].players[player_caught.id].captured = true
-   rooms[roomId].players[player_caught.id].pos = player_caught.team==0?GREEN_PRISON_LOC:RED_PRISON_LOC
+   rooms[roomId].players[player_caught.id].pos = player_caught.team==0?config.game.prison.location.green:config.game.prison.location.red
 }
 
 function PlayerFreed(roomId,player_freed){
@@ -599,7 +584,7 @@ function ShouldFlagBeCaptured(player,flag)
   }
 
   var distancePlayerFromFlag = Vector2Magnitude(Vector2Subtraction(player.pos,flag.pos))
-  var flagEstimatedWidth = FLAG_HEIGHT
+  var flagEstimatedWidth = config.flag.size
   var minDistFromFlag = player.stats.diameter/2 + flagEstimatedWidth
 
   if(distancePlayerFromFlag <= minDistFromFlag)
@@ -624,7 +609,7 @@ function FlagDropped(flag)
 {
   flag.captured = false
   flag.capturer_id = ""
-  flag.pos = flag.team==0?RED_PRISON_LOC:GREEN_PRISON_LOC
+  flag.pos = flag.team==0?config.game.prison.location.red:config.game.prison.location.green
 }
 
 function TeamScored(roomId,team,player_display_name)
@@ -639,7 +624,7 @@ function ResetMap(roomId)
 {
   for(var playerID in rooms[roomId].players)
   {
-    rooms[roomId].players[playerID].pos = rooms[roomId].players[playerID].team==0 ? RED_SPAWN : GREEN_SPAWN 
+    rooms[roomId].players[playerID].pos = rooms[roomId].players[playerID].team==0 ? config.game.spawn.location.red : config.game.spawn.location.green
     rooms[roomId].players[playerID].waypoint = rooms[roomId].players[playerID].pos
     rooms[roomId].players[playerID].stamina = 100
     rooms[roomId].players[playerID].captured = false
@@ -649,7 +634,7 @@ function ResetMap(roomId)
   for(var index in rooms[roomId].flags)
   {
     FlagDropped(rooms[roomId].flags[index])
-    rooms[roomId].flags[index].pos = rooms[roomId].flags[index].team==0? RED_PRISON_LOC:GREEN_PRISON_LOC
+    rooms[roomId].flags[index].pos = rooms[roomId].flags[index].team==0? config.game.prison.location.red:config.game.prison.location.green
   }
 
   rooms[roomId].GAME_IN_PROGRESS = false
@@ -689,15 +674,15 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     hasFlag : false,
     
     isReaching : false,
-    reach: PLAYER_REACH_STANDARD,
+    reach: config.player.reach.distance.standard,
     reach_period_cur : 0,
-    reach_period_max : PLAYER_REACH_TIME_MAX_STANDARD,
+    reach_period_max : config.player.reach.duration.standard,
 
     sprint: false,
     stamina : 100,
     stats : {
       speed : 300,
-      diameter : PLAYER_DIAMETER_SMALL,
+      diameter : config.player.size.small,
     }
   }
 }

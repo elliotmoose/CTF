@@ -112,6 +112,8 @@ document.bgColor = "#5a5460"
 //     });
 // });
 
+console.log(config.player.size.standard)
+
 function preload()
 {
     
@@ -538,7 +540,6 @@ function draw()
         text(`GREEN: ${scores[1]}`,CANVAS_DIMENSIONS.width/2+180,CANVAS_VERTICAL_OFFSET+45)
 
 
-
         //#endregion
         //#region ========================================== UI - PLAYER =================================================
         for(var playerID in players)
@@ -577,7 +578,7 @@ function draw()
 
 
             var playerSize = thisPlayer.stats.diameter
-            var nameLabelWidth = playerSize*2
+            var nameLabelWidth = playerSize*3
             var nameLabelOffset = 40
             var playerFontNameSize = 12
             var playerFontHeight = playerFontNameSize+4
@@ -586,15 +587,13 @@ function draw()
             var staminaBarMaxWidth = 75
             var staminaBarCurWidth = stamina/100*staminaBarMaxWidth
             var staminaBarHeight = playerFontHeight
-            var staminaBarOffset = nameLabelOffset
+            var staminaBarOffset = nameLabelOffset+1
 
             textAlign(CENTER)
             textSize(12);
 
             if(Vector2Magnitude(Vector2Subtraction(thisPlayer.pos,thisPlayer.old_pos)) > LERP_TOLERANCE)
             {
-
-            
                 fill(fillColor)
                 strokeWeight(weight)
                 stroke(strokeColor)    
@@ -608,7 +607,7 @@ function draw()
                 fill(PLAYER_GREEN)
                 rect(thisPlayer.pos.x-staminaBarMaxWidth/2,thisPlayer.pos.y - staminaBarOffset,staminaBarCurWidth,staminaBarHeight)
 
-                
+                //player name
                 fill(WHITE)
                 text(thisPlayer.display_name,thisPlayer.pos.x - nameLabelWidth/2,thisPlayer.pos.y - nameLabelOffset,nameLabelWidth,staminaBarHeight)
                 continue
