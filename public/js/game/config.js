@@ -21,6 +21,12 @@ var config = {
                 long: 0.5,
                 short: 0.15
             } 
+        },
+        stamina:
+        {
+            max:{
+                standard: 100
+            }
         }
     },
 

@@ -600,7 +600,7 @@ function draw()
 
             var stamina = thisPlayer.stamina
             var staminaBarMaxWidth = 75
-            var staminaBarCurWidth = stamina/100*staminaBarMaxWidth
+            var staminaBarCurWidth = stamina/thisPlayer.max_stamina*staminaBarMaxWidth
             var staminaBarHeight = playerFontHeight
             var staminaBarRounded = staminaBarHeight/2
             var staminaBarOffset = nameLabelOffset+1

@@ -610,7 +610,7 @@ function FlagCapturedBy(player,flag)
 {
   flag.captured = true
   flag.capturer_id = player.id
-  player.stamina = 100
+  player.stamina += player.max_stamina/2
   console.log("Flag captured by " + player.id)
 }
 
@@ -693,7 +693,8 @@ function NewPlayerObject(id,startPos,team,player_display_name)
     reach_period_max : config.player.reach.duration.standard,
 
     sprint: false,
-    stamina : 100,
+    stamina : config.player.stamina.max.standard,
+    max_stamina: config.player.stamina.max.standard,
     stats : {
       speed : 300,
       diameter : config.player.size.small,
