@@ -594,8 +594,7 @@ function ShouldFlagBeCaptured(player,flag)
   }
 
   var distancePlayerFromFlag = Vector2Magnitude(Vector2Subtraction(player.pos,flag.pos))
-  var flagEstimatedWidth = config.flag.size
-  var minDistFromFlag = player.stats.diameter/2 + flagEstimatedWidth
+  var minDistFromFlag = player.stats.diameter/2 + config.flag.size/2
 
   if(distancePlayerFromFlag <= minDistFromFlag)
   {
