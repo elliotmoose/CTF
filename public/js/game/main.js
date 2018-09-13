@@ -920,6 +920,7 @@ function ReceivePackage(package,nsp){
 
     if(package['GAME_BEGIN'] != null)
     {
+        GAME_IN_PROGRESS = true
         clearInterval(counterInterval)
         countingDown = false
     }
