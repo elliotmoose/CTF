@@ -221,7 +221,6 @@ function PlayerDisconnectedFromRoom(roomId,socket_id)
   }
   else
   {
-
     //if flag carrier disconnects, drop flag
     //Should flag be dropped
     for (var flag of rooms[roomId].flags) 
@@ -460,8 +459,15 @@ function UpdateFlagPosition(thisRoom)
 
     if(flag.captured)
     {  
+      var thisPlayer = thisRoom.players[flag.capturer_id]
+      if(thisPlayer == null)
+      {
+        FlagDropped(flag)
+        console.log('player left')
+        continue
+      }
       //============================== UPDATE FLAG POSITION ==============================
-      flag.pos = thisRoom.players[flag.capturer_id].pos
+      flag.pos = thisPlayer.pos
     }
     else
     {
