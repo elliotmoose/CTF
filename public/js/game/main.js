@@ -11,7 +11,7 @@ var eventsPadding = 16
 var scoreFontSize = 30
 var scoreTopPadding = 30
 
-const CANVAS_DIMENSIONS = {width: 1600,height: 800}
+const CANVAS_DIMENSIONS = config.CANVAS_DIMENSIONS
 const DOCUMENT_MARGIN = 8
 
 var CANVAS_HORIZONTAL_OFFSET = (window.innerWidth-CANVAS_DIMENSIONS.width)/2;
@@ -69,6 +69,7 @@ var update_clock;
 var game_start_time = 0
 
 //ui elements
+
 //      ui - intro 
 var start_button;
 var name_input;
@@ -113,6 +114,29 @@ function preload()
 
 function setup()
 {   
+    //size to fit
+    var body = document.getElementsByTagName('body')
+
+
+    var screen_height = CANVAS_DIMENSIONS.height + eventsTableHeight + chatHeight + eventsPadding + chatPadding + 50
+    var screen_width = CANVAS_DIMENSIONS.width
+
+    var ratio = window.innerWidth/window.innerHeight //has to be 3:2
+    var scale = 1
+    
+    if(ratio < screen_width/screen_height) //if the window width is larger
+    {
+        //configure by width
+        scale = window.innerWidth/screen_width
+    }
+    else
+    {
+        scale = window.innerHeight/screen_height
+    }
+
+    
+    body[0].style.transform = `scale(${scale})`
+
     p5setup = true
     // frameRate(fps)
     MAP_GREEN = color(42, 130, 62)
@@ -428,7 +452,6 @@ function QuitToLobby()
 //#endregion
 
 //#region ========================================== FRAME FUNCTIONS ==========================================
-
 function Update()
 {
     // ========================================== PLAYER MOVEMENT =================================================
@@ -444,22 +467,15 @@ function Update()
         return
     }
 
-    if(document.activeElement != chat_input.elt)
+    if(GAME_IN_PROGRESS)
     {
-        if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
+        if(document.activeElement != chat_input.elt)
         {
-            socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+            if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
+            {
+                socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+            }
         }
-    
-        // if(keyIsDown(67))
-        // {
-        //     //socket.emit('PLAYER_PASSED_FLAG')
-            
-        // }
-    }
-    else
-    {
-        console.log("FOCUS DUDE")
     }
 
     framesSinceLastPing += 1
@@ -502,11 +518,11 @@ function draw()
 {
     // console.log(frameRate())
     // ========================================== UI - GAME =================================================
-    if(CONNECTED_TO_ROOM && GAME_IN_PROGRESS && current_scene == "GAME")
+    if(CONNECTED_TO_ROOM && current_scene == "GAME")
     {
         timeElapsedSincePackage += 1000/frameRate()
         //#region ========================================== UI - MAP =================================================
-        background(CANVAS_BG);
+        
         
         strokeWeight(1)
         stroke(BLACK)
@@ -725,8 +741,6 @@ function PositionMenuItems()
 
 //#region ========================================== STATE INITIALIZERS =================================================
 
-// socket.on('JOINED_LOBBY',OnJoinedLobby)
-
 function OnJoinedLobby() //AFTER JOIN LOBBY ===== INIT LOBBY CALLBACKS
 {
     console.log('JOINED LOBBY')
@@ -883,7 +897,7 @@ function ReceivePackage(package,nsp){
 
     if(package["COUNTDOWN_BEGIN"] != null)
     {
-        // GAME_IN_PROGRESS = false
+        GAME_IN_PROGRESS = false
         countingDown = true
         countDown = 3
         countDownText = '3'
@@ -914,6 +928,13 @@ function ReceivePackage(package,nsp){
     {
         scores = package["SCORE"]
     }
+
+    if(package["TEAM_WIN"] != null)
+    {
+        var winner = package["TEAM_WIN"]
+        GAME_IN_PROGRESS = false
+    }
+
 }
 
 

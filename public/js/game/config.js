@@ -1,6 +1,6 @@
 var config = {
     CANVAS_DIMENSIONS: {
-        width : 1600,
+        width : 1800,
         height: 800
     },
 
@@ -30,7 +30,7 @@ var config = {
 
     game: {
         prison: {
-            radius: 150,
+            radius: 100,
             location: {
                 red: {x: 0,y: 0}, //init later
                 green: {x: 0,y: 0} //init later

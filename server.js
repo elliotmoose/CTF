@@ -435,6 +435,15 @@ function CheckWinCondition(thisRoom)
       }
     }
   }
+
+  for (var key in thisRoom.score)
+  {
+    var thisScore = thisRoom.score[key]
+    if(thisScore > thisRoom.properties.max_score)
+    {
+      TeamWon(thisRoom,key)
+    }
+  }
 }
 
 function UpdateFlagPosition(thisRoom)
@@ -615,6 +624,11 @@ function TeamScored(thisRoom,team,player_display_name)
   SendAllClients(thisRoom,'SCORE',thisRoom.score)
 }
 
+function TeamWon(thisRoom,key)
+{
+  SendAllClients(thisRoom,'WIN',key)
+}
+
 function ResetMap(thisRoom)
 {
   for(var playerID in thisRoom.players)
@@ -710,6 +724,10 @@ function NewRoomObject(id,display_name)
     teams_count:{
       0: 0,
       1: 1
+    },
+    properties:{
+      max_score: 20,
+      max_players : 6,
     }
   }
 }
