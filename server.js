@@ -611,7 +611,7 @@ function FlagCapturedBy(player,flag)
 {
   flag.captured = true
   flag.capturer_id = player.id
-
+  player.stamina = 100
   console.log("Flag captured by " + player.id)
 }
 
