@@ -128,7 +128,7 @@ function CreateRoom(creator_socket,display_name)
         console.log("WARNING!!: player null")
         return
       }      
-         
+      
       //PUSH TO DATA, UPDATE WILL OCCUR IN UPDATE QUEUE
       rooms[newRoomId].players[socket.id].waypoint = request
       rooms[newRoomId].players[socket.id].sprint = request.sprint

@@ -112,6 +112,7 @@ function preload()
     
 }
 
+var scale = 1
 function setup()
 {   
     //size to fit
@@ -122,7 +123,7 @@ function setup()
     var screen_width = CANVAS_DIMENSIONS.width
 
     var ratio = window.innerWidth/window.innerHeight //has to be 3:2
-    var scale = 1
+    
     
     if(ratio < screen_width/screen_height) //if the window width is larger
     {
@@ -455,10 +456,6 @@ function QuitToLobby()
 function Update()
 {
     // ========================================== PLAYER MOVEMENT =================================================
-    // if(mouseIsPressed)
-    // {
-    //     socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
-    // }
 
     var myPlayer = players[socket.id]
 
@@ -473,7 +470,8 @@ function Update()
         {
             if(mouseX != myPlayer.pos.x && mouseY != myPlayer.pos.y )
             {
-                socket.emit('PLAYER_MOVED',{x: mouseX, y:mouseY, sprint: keyIsDown(32)})
+                console.log({mouseX, mouseY});
+                socket.emit('PLAYER_MOVED',{x: mouseX/scale, y:mouseY/scale, sprint: keyIsDown(32)})
             }
         }
     }
