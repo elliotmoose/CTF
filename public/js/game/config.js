@@ -36,7 +36,7 @@ var config = {
 
     game: {
         prison: {
-            radius: 70,
+            radius: 130,
             location: {
                 red: {x: 0,y: 0}, //init later
                 green: {x: 0,y: 0} //init later
